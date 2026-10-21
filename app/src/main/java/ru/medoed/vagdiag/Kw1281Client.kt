@@ -33,17 +33,18 @@ class Kw1281Client(
     private fun pause(ms: Int) { if (ms > 0) Thread.sleep(ms.toLong()) }
 
     /**
-     * Automatic connection attempt: keep the selected ECU address, but try the common
-     * post-init UART rates without requiring the user to guess one. A successful KW1281
-     * handshake is the only condition that counts as detection; a timeout is not proof
-     * that the ECU is absent or faulty.
+     * Automatic connection attempt, Vasya Diagnost style: the ECU address is kept, but the
+     * post-init UART rate is auto-selected — for engine/airbag/instrument/central-lock blocks
+     * 10400 baud is tried first, for all other blocks 9600 (see VasyaDefaults.preferredBaud),
+     * then the remaining KW1281 rates. Slow-init always runs at Start Baud (default 5).
+     * A successful KW1281 handshake is the only condition that counts as detection; a timeout
+     * is not proof that the ECU is absent or faulty.
      */
     @Synchronized
-    fun connectAuto(address: Int = 0x01, preferredBaudRate: Int = 10400, preferredStartBaud: Int = 5, initRetries: Int = initRetryTimes): String {
-        val rates = listOf(preferredBaudRate, 10400, 9600, 4800).distinct()
-            .filter { it in setOf(4800, 9600, 10400) }
+    fun connectAuto(address: Int = 0x01, preferredBaudRate: Int = 0, preferredStartBaud: Int = 5, initRetries: Int = initRetryTimes): String {
+        val rates = VasyaDefaults.baudCandidates(address, preferredBaudRate.takeIf { it != 0 })
         val errors = mutableListOf<String>()
-        dbgVerbose("Автоопределение: кандидаты пост-init скоростей: ${rates.joinToString()} (Start Baud влияет на slow-init)")
+        dbgVerbose("Автоопределение (как в Васе): кандидаты пост-init скоростей: ${rates.joinToString()} (Start Baud влияет на slow-init)")
         for (rate in rates) {
             connected = false
             log("Автоопределение ЭБУ: адрес %02X, проверка %d бод".format(address, rate))

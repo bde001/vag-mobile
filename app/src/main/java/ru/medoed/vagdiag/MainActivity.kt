@@ -319,19 +319,19 @@ class MainActivity : Activity() {
             }.also { fields.addView(it, LinearLayout.LayoutParams(-1, -2)) }
         }
         val address = field("Адрес ЭБУ (двигатель обычно 01)", current.ecuAddress)
-        // Vasya Diagnost-style advanced options
-        val startBaud = field("Start Baud — скорость slow-init (по умолчанию 5)", current.startBaudRate)
-        val baud = field("Скорость после инициализации, бод", current.baudRate)
+        // Vasya Diagnost-style advanced options (labels mirror his "Protocol settings" dialog)
+        val startBaud = field("Start Baud — скорость slow-init (как в Васе: 5)", current.startBaudRate)
+        val baud = field("Скорость после инициализации: 0 = Авто (как в Васе), либо 4800/9600/10400", current.baudRate)
         val response = field("Тайм-аут ответа, мс", current.responseTimeoutMs)
         val init = field("Тайм-аут инициализации, мс", current.initTimeoutMs)
-        val echoDelay = field("Echo delay — пауза перед чтением эха/ACK, мс (0..100)", current.echoDelayMs)
-        val blkDelay = field("BLK — задержка после целого блока, мс (0..1000)", current.blockDelayMs)
-        val intDelay = field("Int — межбайтовая задержка в блоке, мс (0..100)", current.interByteDelayMs)
-        val charIntDelay = field("Delay Char int — доп. пауза между символами, мс (0..100)", current.charInterDelayMs)
-        val debug = field("Debug level: 0 выкл, 1 байты TX/RX, 2 максимально подробно", current.debugLevel)
+        val echoDelay = field("Echo Delay — пауза вокруг эха/ACK, мс (как в Васе: 0)", current.echoDelayMs)
+        val blkDelay = field("Blk Int — задержка между блоками, мс (как в Васе: 55)", current.blockDelayMs)
+        val intDelay = field("Char Int — межбайтовая задержка в блоке, мс (как в Васе: 1)", current.interByteDelayMs)
+        val charIntDelay = field("Delay Char int — доп. пауза между символами, мс (как в Васе: 1)", current.charInterDelayMs)
+        val debug = field("Debug Level: 0 выкл, 1 байты TX/RX, 2 максимально подробно", current.debugLevel)
         val retries = field("Init retry times — повторов slow-init при отсутствии ответа (1..5)", current.initRetryTimes)
         fields.addView(TextView(this).apply {
-            text = "Дополнительные параметры (Echo delay, BLK, Int, Delay Char int, Debug level) повторяют настройки Васи Диагноста. Меняй только при диагностике проблем с таймингами KKL-кабеля."
+            text = "Параметры и значения по умолчанию повторяют Васю Диагност (Start Baud 5, Echo Delay 0, Blk Int 55, Char Int 1). Скорость «Авто» подбирается по адресу блока, как у Васи: 01/15/17/25/35/36 → сначала 10400, остальные → сначала 9600."
             textSize = 11f
             setTextColor(0xFF647C91.toInt())
             setPadding(0, dp(10), 0, dp(4))
@@ -341,11 +341,11 @@ class MainActivity : Activity() {
             .setTitle("Настройки подключения")
             .setView(scroll)
             .setNeutralButton("По умолчанию") { _, _ ->
-                diagnosticSettings = DiagnosticSettings()
+                diagnosticSettings = VasyaDefaults.vasyaSettings(diagnosticSettings.ecuAddress)
                 diagnosticSettings.save(this)
                 kwClient = null
                 scanButton.text = "Подключиться к ЭБУ · адрес %02X".format(diagnosticSettings.ecuAddress)
-                appendLog("Настройки сброшены по умолчанию: ${diagnosticSettings.describe()}")
+                appendLog("Настройки сброшены по умолчанию (как в Васе): ${diagnosticSettings.describe()}")
                 Toast.makeText(this, "Настройки по умолчанию восстановлены", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Отмена", null)
@@ -367,7 +367,7 @@ class MainActivity : Activity() {
                         val error = when {
                             a == null || a !in 0..127 -> "Адрес должен быть от 0 до 127"
                             sb == null || sb !in 1..115200 -> "Start Baud: от 1 до 115200 (обычно 5)"
-                            b == null || b !in listOf(4800, 9600, 10400) -> "Скорость: 4800, 9600 или 10400"
+                            b == null || (b != 0 && b !in listOf(4800, 9600, 10400)) -> "Скорость: 0 = авто (как в Васе), либо 4800/9600/10400"
                             r == null || r !in 100..10000 -> "Тайм-аут ответа: 100–10000 мс"
                             i == null || i !in 1000..15000 -> "Тайм-аут инициализации: 1000–15000 мс"
                             echo == null || echo !in 0..100 -> "Echo delay: 0–100 мс"
@@ -596,14 +596,14 @@ class MainActivity : Activity() {
         val serial = port
         if (serial == null) { appendLog("Сначала подключи USB KKL"); return }
         val targets = listOf(
-            Triple(0x01, "Двигатель", 9600), Triple(0x02, "АКПП", 9600),
-            Triple(0x03, "ABS", 9600), Triple(0x08, "Климат", 9600),
-            Triple(0x15, "Подушки безопасности", 9600), Triple(0x17, "Приборная панель", 10400),
-            Triple(0x35, "Центральный замок", 9600), Triple(0x46, "Комфорт", 9600),
-            Triple(0x56, "Магнитола", 9600)
+            Triple(0x01, "Двигатель", 0), Triple(0x02, "АКПП", 0),
+            Triple(0x03, "ABS", 0), Triple(0x08, "Климат", 0),
+            Triple(0x15, "Подушки безопасности", 0), Triple(0x17, "Приборная панель", 0),
+            Triple(0x35, "Центральный замок", 0), Triple(0x46, "Комфорт", 0),
+            Triple(0x56, "Магнитола", 0)
         )
         controllerScanButton?.isEnabled = false
-        appendLog("Начинаю последовательный опрос ${targets.size} адресов KW1281. Это может занять несколько минут.")
+        appendLog("Начинаю последовательный опрос ${targets.size} адресов KW1281 (скорость подбирается по адресу, как в Васе). Это может занять несколько минут.")
         io.execute {
             val found = mutableListOf<String>()
             val missed = mutableListOf<String>()
@@ -623,14 +623,14 @@ class MainActivity : Activity() {
                         debugLevel = diagnosticSettings.debugLevel,
                         initRetryTimes = diagnosticSettings.initRetryTimes
                     )
-                    val handshake = client.connect(address, baud, startBaudRate = diagnosticSettings.startBaudRate)
+                    val handshake = client.connectAuto(address, baud, diagnosticSettings.startBaudRate)
                     kwClient = client
                     val identification = try { client.readIdentification() } catch (e: Exception) { "Идентификация не прочитана: ${e.message}" }
-                    found += "%02X — %s (%d бод)\n%s\n%s".format(address, label, baud, identification, handshake)
+                    found += "%02X — %s\n%s\n%s".format(address, label, identification, handshake)
                     try { client.disconnect() } catch (_: Exception) { }
                     kwClient = null
                 } catch (e: Exception) {
-                    missed += "%02X — %s (%d бод): %s".format(address, label, baud, e.message ?: e.javaClass.simpleName)
+                    missed += "%02X — %s: %s".format(address, label, e.message ?: e.javaClass.simpleName)
                     try { kwClient?.disconnect() } catch (_: Exception) { }
                     kwClient = null
                 }
