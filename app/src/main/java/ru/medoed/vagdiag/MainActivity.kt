@@ -17,7 +17,6 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.TextView
@@ -40,17 +39,12 @@ class MainActivity : Activity() {
     private lateinit var deviceInfo: TextView
     private lateinit var logView: TextView
     private lateinit var connectButton: Button
-    private lateinit var readButton: Button
-    private lateinit var scanButton: Button
-    private var controllerScanButton: Button? = null
+    private lateinit var settingsButton: Button
+    private lateinit var addressField: EditText
     private lateinit var mainScroll: ScrollView
     private lateinit var quickAccessAnchor: View
     private lateinit var diagnosticAnchor: View
     private lateinit var logAnchor: View
-    private lateinit var dtcButton: Button
-    private lateinit var groupsButton: Button
-    private lateinit var adaptButton: Button
-    private lateinit var shareLogButton: Button
     private lateinit var groupInput: EditText
     private var kwClient: Kw1281Client? = null
     private var busyCount = 0
@@ -87,217 +81,230 @@ class MainActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(permissionReceiver, filter)
         }
-        appendLog("VAG Diag Android 0.7.0-alpha started")
-        appendLog("Target: Golf IV 1.6 16V BCB / USB KKL CH340")
-        appendLog("No ECU data is fabricated. Diagnostic protocol support is not yet validated.")
+        appendLog("VCDS-KW1281 1.1.0-alpha started")
+        appendLog("Vehicle   : Golf IV 1.6 16V BCB / Interface: USB KKL CH340")
+        appendLog("KW1281 only. No fabricated ECU data; validation on real vehicle required.")
         refreshDevices()
     }
 
+    /**
+     * VCDS-стиль: тёмный «терминальный» интерфейс с зелёным моноширинным текстом.
+     * Верхняя панель — статус соединения (как «Testers / Vehicle / Mode» в VCDS),
+     * ниже — выбор блока (Select Control Module), функциональные кнопки в ряд
+     * (Read Measuring Blocks / Read Fault Codes / Clear Fault Codes / Basic Settings /
+     * Identification / Prototype Coding) и большое окно вывода (Output window).
+     */
     private fun buildUi() {
-        val navy = 0xFF082B4C.toInt()
-        val blue = 0xFF075CB5.toInt()
-        val pale = 0xFFF0F5FA.toInt()
-        val ink = 0xFF153653.toInt()
-        val muted = 0xFF647C91.toInt()
+        val bg = 0xFF0A0A0A.toInt()          // почти чёрный фон, как окно VCDS
+        val panel = 0xFF101010.toInt()       // панели чуть светлее
+        val green = 0xFF00E000.toInt()       // основной зелёный текст
+        val brightGreen = 0xFF6AFF6A.toInt() // подсветка активной кнопки
+        val dimGreen = 0xFF008F3A.toInt()    // второстепенный текст
+        // (amber зарезервирован под будущие предупреждения в стиле VCDS)
+        val red = 0xFFFF5F5F.toInt()         // ошибка/не активно
+        val mono = android.graphics.Typeface.MONOSPACE
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(pale)
-        }
-        val scroll = ScrollView(this)
-        mainScroll = scroll
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(22))
+            setBackgroundColor(bg)
+            setPadding(dp(6), dp(6), dp(6), dp(6))
         }
 
-        // Dark VAG-style top bar
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(18), dp(18), dp(18))
-            background = rounded(navy, 0, 0, 0, 0)
+        // ===== Верхняя строка статуса (аналог шапки VCDS) =====
+        val headRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(6), dp(4), dp(6))
         }
-        val brandRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val logo = ImageView(this).apply {
-            setImageResource(R.drawable.vag_diag_logo)
-            contentDescription = "Логотип VAG Diag Android"
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            layoutParams = LinearLayout.LayoutParams(dp(52), dp(52)).apply { rightMargin = dp(12) }
-        }
-        brandRow.addView(logo)
-        val brandText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        brandText.addView(TextView(this).apply {
-            text = "VAG Diag Android"; textSize = 21f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(0xFFFFFFFF.toInt())
-        })
-        brandText.addView(TextView(this).apply {
-            text = "GOLF IV · 1.6 16V BCB"; textSize = 12f; setTextColor(0xFFB9D2E7.toInt())
-        })
-        brandRow.addView(brandText, LinearLayout.LayoutParams(0, -2, 1f))
+        headRow.addView(TextView(this).apply {
+            text = "VCDS-KW1281"; textSize = 17f; typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(green)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
         val menuButton = TextView(this).apply {
-            text = "☰"
-            textSize = 27f
-            gravity = Gravity.CENTER
-            setTextColor(0xFFFFFFFF.toInt())
-            contentDescription = "Открыть меню"
-            isClickable = true
-            isFocusable = true
-            setPadding(dp(8), dp(4), dp(8), dp(4))
+            text = "[Меню]"
+            textSize = 14f; typeface = mono; gravity = Gravity.CENTER
+            setTextColor(green); isClickable = true; isFocusable = true
+            setPadding(dp(10), dp(4), dp(10), dp(4))
             setOnClickListener { showNavigationMenu(this) }
         }
-        brandRow.addView(menuButton, LinearLayout.LayoutParams(dp(44), dp(48)))
-        header.addView(brandRow)
+        headRow.addView(menuButton)
+        root.addView(headRow)
+
         status = TextView(this).apply {
-            text = "● Адаптер не подключён"; textSize = 13f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(0xFFFFD6D6.toInt()); setPadding(dp(12), dp(9), dp(12), dp(9))
-            background = rounded(0xFF173D5D.toInt(), 12, 12, 12, 12)
+            text = "K-TESTER : NOT CONNECTED"; textSize = 13f; typeface = mono
+            setTextColor(red); setPadding(dp(6), dp(4), dp(6), dp(4))
         }
-        header.addView(status, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
+        root.addView(status, matchWrap())
         deviceInfo = TextView(this).apply {
-            text = "USB KKL · CH340 · OTG"; textSize = 12f; setTextColor(0xFFB9D2E7.toInt())
-            setPadding(dp(2), dp(8), dp(2), 0)
+            text = "VEHICLE   : Golf IV 1.6 16V BCB (ME7.5.10?)"; textSize = 12f; typeface = mono
+            setTextColor(dimGreen); setPadding(dp(6), 0, dp(6), dp(4))
         }
-        header.addView(deviceInfo)
-        root.addView(header)
+        root.addView(deviceInfo, matchWrap())
 
-        val carBanner = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(10), dp(14), dp(10))
-            background = rounded(0xFFFFFFFF.toInt(), 16, 16, 16, 16)
+        // ===== Кнопки адаптера =====
+        val adapterRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        connectButton = vcdsButton("Connect", green) { refreshDevices() }
+        adapterRow.addView(connectButton, vcdsBtnParams())
+        adapterRow.addView(vcdsButton("Disconnect", green) { disconnectAdapter() }, vcdsBtnParams())
+        root.addView(adapterRow, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
+
+        // ===== Выбор адреса блока (Select Control Module) =====
+        val addrRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        addrRow.addView(TextView(this).apply {
+            text = "Adresse:"; textSize = 14f; typeface = mono; setTextColor(green)
+            setPadding(0, 0, dp(8), 0)
+        })
+        addressField = EditText(this).apply {
+            setText("%02X".format(diagnosticSettings.ecuAddress)); setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            filters = arrayOf(android.text.InputFilter.LengthFilter(2))
+            textSize = 16f; typeface = mono; setTextColor(brightGreen); setHintTextColor(dimGreen)
+            gravity = Gravity.CENTER
+            background = rounded(panel, 4, 4, 4, 4)
+            setPadding(dp(10), dp(8), dp(10), dp(8))
         }
-        val carPicture = ImageView(this).apply {
-            setImageResource(R.drawable.golf_car_illustration)
-            contentDescription = "Иллюстрация автомобиля Volkswagen Golf IV"
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            layoutParams = LinearLayout.LayoutParams(dp(126), dp(76)).apply { rightMargin = dp(12) }
-        }
-        carBanner.addView(carPicture)
-        val carCopy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        carCopy.addView(TextView(this).apply {
-            text = "ТВОЙ АВТОМОБИЛЬ"; textSize = 10f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(0xFF0874C9.toInt())
-        })
-        carCopy.addView(TextView(this).apply {
-            text = "Volkswagen Golf IV"; textSize = 17f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(ink)
-        })
-        carCopy.addView(TextView(this).apply {
-            text = "1.6 16V · BCB · K-line"; textSize = 12f; setTextColor(muted)
-        })
-        carBanner.addView(carCopy, LinearLayout.LayoutParams(0, -2, 1f))
-        content.addView(carBanner, matchWrap())
+        addrRow.addView(addressField, LinearLayout.LayoutParams(dp(72), -2).apply { marginEnd = dp(8) })
+        addrRow.addView(TextView(this).apply {
+            text = "(01 Motronic · 03 ABS · 15 Airbag · 17 Panel · 08 Climat…)"; textSize = 10f
+            typeface = mono; setTextColor(dimGreen)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(addrRow, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(2); bottomMargin = dp(2) })
 
-        content.addView(TextView(this).apply {
-            text = "Volkswagen Golf IV"; textSize = 20f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(ink); setPadding(dp(2), dp(16), dp(2), 0)
-        })
-        content.addView(TextView(this).apply {
-            text = "2001 · Бензин · ME7.5.10 (ожидаемый тип, будет уточнён по ЭБУ)"
-            textSize = 12f; setTextColor(muted); setPadding(dp(2), dp(3), dp(2), dp(12))
-        })
+        settingsButton = vcdsButton("Protocol settings…", dimGreen) { showDiagnosticSettings() }
+        root.addView(settingsButton, matchWrap())
 
-        connectButton = button("Подключить USB KKL", true) { refreshDevices() }
-        content.addView(connectButton, matchWrap())
-        content.addView(button("Отключить адаптер", false) { disconnectAdapter() }, matchWrap())
-
-        quickAccessAnchor = section("БЫСТРЫЙ ДОСТУП")
-        content.addView(quickAccessAnchor)
-        // Two-column VAG-style tiles. Each tile opens a real implemented action or clearly reports that it is unavailable.
-        val row1 = tileRow()
-        row1.addView(tile("▦", "Список блоков", "Опрос KW1281") { scanControllers() }, tileParams())
-        row1.addView(tile("⚠", "Ошибки DTC", "Двигатель · адрес 01") {
-            runDiagnostic("Подключение и чтение DTC") { client -> client.connectAuto(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate, diagnosticSettings.startBaudRate, fastInit = diagnosticSettings.fastInit); client.readFaults() }
-        }, tileParams())
-        content.addView(row1, matchWrap())
-        val row2 = tileRow()
-        row2.addView(tile("⌁", "Измерения", "Группы и сырые данные") {
-            val g = groupInput.text.toString().trim().toIntOrNull() ?: 1
-            runDiagnostic("Группа $g") { client -> client.readGroup(g) }
-        }, tileParams())
-        row2.addView(tile("☷", "Адаптации", "Пока недоступны") { unsupported("Адаптации") }, tileParams())
-        content.addView(row2, matchWrap())
-        val row3 = tileRow()
-        row3.addView(tile("⚙", "Базовые установки", "Не реализованы") { unsupported("Базовые установки") }, tileParams())
-        row3.addView(tile("≡", "Журнал", "Сохранить / отправить") { shareLog() }, tileParams())
-        content.addView(row3, matchWrap())
-
-        content.addView(section("ДИАГНОСТИКА ДВИГАТЕЛЯ"))
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = rounded(0xFFFFFFFF.toInt(), 16, 16, 16, 16)
-        }
-        panel.addView(TextView(this).apply {
-            text = "Блок 01 — Двигатель"; textSize = 16f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(ink)
-        })
-        panel.addView(TextView(this).apply {
-            text = "Сначала установи соединение с USB-адаптером, затем попробуй подключиться к ЭБУ."
-            textSize = 12f; setTextColor(muted); setPadding(0, dp(4), 0, dp(10))
-        })
-        panel.addView(button("⚙ Настройки подключения", false) { showDiagnosticSettings() }, matchWrap())
-        scanButton = button(connectLabel(), true) {
-            runDiagnostic("Автоопределение ЭБУ") { client ->
-                val connection = client.connectAuto(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate, diagnosticSettings.startBaudRate, fastInit = diagnosticSettings.fastInit)
-                val identification = try { client.readIdentification() } catch (e: Exception) { "Идентификация не прочитана: ${e.message}" }
-                "$connection\nИдентификация ЭБУ:\n$identification"
+        // ===== Функциональные кнопки, как нижний ряд окон VCDS =====
+        fun fnRow(vararg labels: Pair<String, () -> Unit>) {
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            labels.forEach { (label, action) ->
+                val btn = vcdsButton(label, green, action = action)
+                btn.setOnTouchListener { v, e ->
+                    when (e.actionMasked) {
+                        android.view.MotionEvent.ACTION_DOWN -> (v as Button).setTextColor(0xFF6AFF6A.toInt())
+                        android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                            (v as Button).setTextColor(green)
+                    }
+                    false
+                }
+                row.addView(btn, vcdsBtnParams())
             }
+            root.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
         }
-        panel.addView(scanButton, matchWrap())
-        panel.addView(button("Прочитать идентификацию ЭБУ", false) {
-            runDiagnostic("Идентификация") { client -> client.readIdentification() }
-        }, matchWrap())
-        dtcButton = button("Прочитать ошибки двигателя", false) {
-            runDiagnostic("Чтение DTC") { client -> client.readFaults() }
-        }
-        panel.addView(dtcButton, matchWrap())
-        panel.addView(button("Очистить ошибки…", false) {
-            android.app.AlertDialog.Builder(this)
-                .setTitle("Очистить ошибки ЭБУ?")
-                .setMessage("Сначала сохрани ошибки и данные диагностики. Очистка удаляет сохранённые DTC, но не устраняет неисправность.")
-                .setNegativeButton("Отмена", null)
-                .setPositiveButton("Очистить") { _, _ -> runDiagnostic("Очистка DTC") { client -> client.clearFaults() } }
-                .show()
-        }, matchWrap())
-        groupInput = EditText(this).apply {
-            hint = "Номер группы (например, 001)"; setSingleLine(true)
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER; setText("001")
-            textSize = 14f; setTextColor(ink); setHintTextColor(muted)
-            background = rounded(0xFFF5F8FB.toInt(), 10, 10, 10, 10)
-            setPadding(dp(12), dp(9), dp(12), dp(9))
-        }
-        panel.addView(groupInput, matchWrap())
-        groupsButton = button("Прочитать измерительную группу", true) {
-            val group = groupInput.text.toString().trim().toIntOrNull()
-            if (group == null || group !in 0..255) Toast.makeText(this, "Укажи группу от 0 до 255", Toast.LENGTH_SHORT).show()
-            else runDiagnostic("Группа $group") { client -> client.readGroup(group) }
-        }
-        panel.addView(groupsButton, matchWrap())
-        diagnosticAnchor = panel
-        content.addView(panel, matchWrap())
+        fnRow(
+            "Autoscan" to { scanControllers() },
+            "Read Measuring Block" to { readMeasuringBlock() }
+        )
+        fnRow(
+            "Read Fault Codes" to {
+                runDiagnostic("Чтение DTC") { client -> ensureSession(client); client.readFaults() }
+            },
+            "Clear Fault Codes" to { confirmClearFaults() }
+        )
+        fnRow(
+            "Basic Settings" to {
+                runDiagnostic("Базовые установки") { client -> ensureSession(client); client.readBasicSettings() }
+            },
+            "Identification" to {
+                runDiagnostic("Идентификация") { client -> ensureSession(client); client.readIdentification() }
+            }
+        )
 
-        val warning = TextView(this).apply {
-            text = "Важно: версия экспериментальная. Инициализация линии работает как в Васе: fast-init (Start Baud 9600) или slow-init (5 бод). Измерения пока отображаются в сыром виде. Адаптации и базовые установки не реализованы. Совместимость CH340/OTG и связь с ЭБУ не подтверждены на реальном автомобиле."
-            textSize = 12f; setTextColor(0xFF80520B.toInt()); setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = rounded(0xFFFFF0D2.toInt(), 12, 12, 12, 12)
-        }
-        content.addView(warning, matchWrap())
-        logAnchor = section("ЖУРНАЛ ДИАГНОСТИКИ")
-        content.addView(logAnchor)
-        logView = TextView(this).apply {
-            textSize = 12f; typeface = android.graphics.Typeface.MONOSPACE
-            setTextColor(0xFFDDE7EF.toInt()); setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = rounded(0xFF0B2238.toInt(), 12, 12, 12, 12); text = "Ожидание действий…\n"
-        }
-        content.addView(logView, matchWrap())
-        shareLogButton = button("Поделиться журналом", false) { shareLog() }
-        content.addView(shareLogButton, matchWrap())
-        content.addView(TextView(this).apply {
-            text = "VAG Diag Android 0.2 · бесплатный проект"; textSize = 11f
-            setTextColor(muted); gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(4))
+        // Номер группы для измерений — отдельная строка ввода, как поле в окне VCDS
+        val groupRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        groupRow.addView(TextView(this).apply {
+            text = "Group:"; textSize = 14f; typeface = mono; setTextColor(green)
+            setPadding(0, 0, dp(8), 0)
         })
-        scroll.addView(content)
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        groupInput = EditText(this).apply {
+            setText("001"); setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            filters = arrayOf(android.text.InputFilter.LengthFilter(3))
+            textSize = 16f; typeface = mono; setTextColor(brightGreen)
+            gravity = Gravity.CENTER
+            background = rounded(panel, 4, 4, 4, 4)
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+        }
+        groupRow.addView(groupInput, LinearLayout.LayoutParams(dp(72), -2))
+        groupRow.addView(TextView(this).apply {
+            text = "  (000–255)"; textSize = 11f; typeface = mono; setTextColor(dimGreen)
+        })
+        root.addView(groupRow, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
+
+        // ===== Окно вывода (Output window) — то же поле, что и журнал =====
+        root.addView(TextView(this).apply {
+            text = "Output:"; textSize = 13f; typeface = mono; setTextColor(green)
+            setPadding(dp(4), dp(4), dp(4), dp(2))
+        })
+        val outFrame = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(0xFF050505.toInt(), 4, 4, 4, 4)
+            setPadding(dp(2), dp(2), dp(2), dp(2))
+        }
+        logView = TextView(this).apply {
+            textSize = 12f; typeface = mono
+            setTextColor(green); setPadding(dp(10), dp(10), dp(10), dp(10))
+            text = ""
+            movementMethod = android.text.method.ScrollingMovementMethod.getInstance()
+        }
+        val outScroll = ScrollView(this).apply {
+            addView(logView)
+            background = null
+        }
+        mainScroll = outScroll
+        outFrame.addView(outScroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(outFrame, LinearLayout.LayoutParams(-1, 0, 1f).apply { bottomMargin = dp(4) })
+        logAnchor = outFrame
+        quickAccessAnchor = addrRow
+        diagnosticAnchor = groupRow
+
+        // ===== Нижняя строка: действия с журналом =====
+        val bottomRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        bottomRow.addView(vcdsButton("Save log", dimGreen) { shareLog() }, vcdsBtnParams())
+        bottomRow.addView(vcdsButton("Clear screen", dimGreen) { logView.text = "" }, vcdsBtnParams())
+        bottomRow.addView(vcdsButton("About", dimGreen) { showAbout() }, vcdsBtnParams())
+        root.addView(bottomRow, LinearLayout.LayoutParams(-1, -2))
+
         setContentView(root)
+    }
+
+    /** Кнопка в стиле VCDS: тёмный фон, цветная моноширинная рамка-подсветка при нажатии. */
+    private fun vcdsButton(label: String, color: Int, action: () -> Unit): Button = Button(this).apply {
+        text = label; isAllCaps = false; textSize = 13f; typeface = android.graphics.Typeface.MONOSPACE
+        minHeight = dp(42)
+        setTextColor(color)
+        background = rounded(0xFF141414.toInt(), 4, 4, 4, 4)
+        setPadding(dp(6), dp(4), dp(6), dp(4))
+        setOnClickListener { action() }
+    }
+
+    private fun vcdsBtnParams() = LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(4) }
+
+    /** Подключение по текущему адресу из поля Adresse (если сеанса ещё нет). */
+    private fun ensureSession(client: Kw1281Client) {
+        val addr = currentAddress()
+        client.connectAuto(addr, diagnosticSettings.baudRate, diagnosticSettings.startBaudRate, fastInit = diagnosticSettings.fastInit)
+    }
+
+    private fun currentAddress(): Int {
+        val raw = if (::addressField.isInitialized) addressField.text.toString().trim() else ""
+        val parsed = raw.toIntOrNull(16) ?: raw.toIntOrNull()
+        return (parsed ?: diagnosticSettings.ecuAddress).coerceIn(0, 127)
+    }
+
+    private fun readMeasuringBlock() {
+        val group = if (::groupInput.isInitialized) groupInput.text.toString().trim().toIntOrNull() else null
+        if (group == null || group !in 0..255) { appendLog("Укажи номер группы 000-255"); return }
+        runDiagnostic("Группа %03d".format(group)) { client -> ensureSession(client); client.readGroup(group) }
+    }
+
+    private fun confirmClearFaults() {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Clear Fault Codes — адрес %02X?".format(currentAddress()))
+            .setMessage("Сначала сохрани ошибки (Read Fault Codes → Save log). Очистка удаляет сохранённые DTC, но не устраняет неисправность.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Clear") { _, _ ->
+                runDiagnostic("Очистка DTC") { client -> ensureSession(client); client.clearFaults() }
+            }
+            .show()
     }
 
     /** Выпадающий список «как галка у Васи»: выбор из нескольких значений вместо цифрового поля. */
@@ -382,7 +389,6 @@ class MainActivity : Activity() {
                 diagnosticSettings = VasyaDefaults.vasyaSettings(diagnosticSettings.ecuAddress)
                 diagnosticSettings.save(this)
                 kwClient = null
-                scanButton.text = connectLabel()
                 appendLog("Настройки сброшены по умолчанию (как в Васе): ${diagnosticSettings.describe()}")
                 Toast.makeText(this, "Настройки по умолчанию восстановлены", Toast.LENGTH_SHORT).show()
             }
@@ -418,15 +424,15 @@ class MainActivity : Activity() {
                             return@setOnClickListener
                         }
                         diagnosticSettings = DiagnosticSettings(
-                            ecuAddress = a!!, baudRate = b, responseTimeoutMs = r!!, initTimeoutMs = i!!,
+                            ecuAddress = a, baudRate = b, responseTimeoutMs = r!!, initTimeoutMs = i!!,
                             startBaudRate = sb, echoDelayMs = echo!!, blockDelayMs = blk!!,
                             interByteDelayMs = inter!!, charInterDelayMs = charInt!!,
                             debugLevel = dbgLvl, initRetryTimes = rt!!,
                             protocolMode = if (sb >= 1000) 2 else 1
                         )
                         diagnosticSettings.save(this)
+                        if (::addressField.isInitialized) addressField.setText("%02X".format(a))
                         kwClient = null
-                        scanButton.text = connectLabel()
                         appendLog("Настройки сохранены: ${diagnosticSettings.describe()}")
                         dialog.dismiss()
                     }
@@ -437,73 +443,34 @@ class MainActivity : Activity() {
 
     private fun showNavigationMenu(anchor: View) {
         val popup = PopupMenu(this, anchor)
-        popup.menu.add(0, 1, 0, "Главная")
-        popup.menu.add(0, 2, 1, "Быстрый доступ")
-        popup.menu.add(0, 3, 2, "Диагностика двигателя")
-        popup.menu.add(0, 4, 3, "Журнал диагностики")
-        popup.menu.add(0, 5, 4, "О приложении")
+        popup.menu.add(0, 1, 0, "Select Control Module")
+        popup.menu.add(0, 2, 1, "Autoscan")
+        popup.menu.add(0, 3, 2, "Protocol settings…")
+        popup.menu.add(0, 4, 3, "About")
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                1 -> mainScroll.smoothScrollTo(0, 0)
-                2 -> mainScroll.post { mainScroll.smoothScrollTo(0, quickAccessAnchor.top) }
-                3 -> mainScroll.post { mainScroll.smoothScrollTo(0, diagnosticAnchor.top) }
-                4 -> mainScroll.post { mainScroll.smoothScrollTo(0, logAnchor.top) }
-                5 -> android.app.AlertDialog.Builder(this)
-                    .setTitle("VAG Diag Android")
-                    .setMessage("""Бесплатное экспериментальное приложение для диагностики автомобилей VAG через USB KKL.
-
-Автомобиль: Volkswagen Golf IV 1.6 16V BCB.
-Адаптер: USB KKL / CH340.
-
-Поддержка протокола и связь с ЭБУ требуют проверки на реальном автомобиле. Адаптации и базовые установки пока не реализованы.""")
-                    .setPositiveButton("Понятно", null)
-                    .show()
+                1 -> addressField.requestFocus()
+                2 -> scanControllers()
+                3 -> showDiagnosticSettings()
+                4 -> showAbout()
             }
             true
         }
         popup.show()
     }
 
-    /** Заголовок кнопки подключения с текущим режимом инициализации — видно «как в Васе». */
-    private fun connectLabel(): String = "Подключиться к ЭБУ · адрес %02X · %s".format(
-        diagnosticSettings.ecuAddress, if (diagnosticSettings.fastInit) "fast-init 9600" else "slow-init 5 бод"
-    )
+    private fun showAbout() {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("VCDS-KW1281 (VAG Diag Android)")
+            .setMessage("""Интерфейс и логика инициализации — в стиле VCDS / Vasya Diagnost.
 
-    private fun section(text: String) = TextView(this).apply {
-        this.text = text; textSize = 11f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-        setTextColor(0xFF58738B.toInt()); setPadding(dp(2), dp(18), dp(2), dp(8))
-    }
+Автомобиль: Volkswagen Golf IV 1.6 16V BCB.
+Адаптер: USB KKL / CH340. Протокол: KW1281 (K-Line).
 
-    private fun button(label: String, primary: Boolean = false, action: () -> Unit) = Button(this).apply {
-        text = label; isAllCaps = false; textSize = 14f; minHeight = dp(46)
-        setTextColor(if (primary) 0xFFFFFFFF.toInt() else 0xFF174568.toInt())
-        background = rounded(if (primary) 0xFF0864B8.toInt() else 0xFFE0EAF3.toInt(), 10, 10, 10, 10)
-        setPadding(dp(12), dp(5), dp(12), dp(5))
-        setOnClickListener { action() }
-    }
-
-    private fun tileRow() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-    private fun tileParams() = LinearLayout.LayoutParams(0, dp(104), 1f).apply {
-        marginEnd = dp(7); bottomMargin = dp(2)
-    }
-    private fun tile(symbol: String, title: String, subtitle: String, action: () -> Unit): View {
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-            setPadding(dp(8), dp(9), dp(8), dp(8))
-            background = rounded(0xFFFFFFFF.toInt(), 14, 14, 14, 14)
-            isClickable = true; isFocusable = true; setOnClickListener { action() }
-        }
-        box.addView(TextView(this).apply {
-            text = symbol; textSize = 24f; gravity = Gravity.CENTER; setTextColor(0xFF075CB5.toInt())
-        })
-        box.addView(TextView(this).apply {
-            text = title; textSize = 13f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER; setTextColor(0xFF153653.toInt())
-        })
-        box.addView(TextView(this).apply {
-            text = subtitle; textSize = 10f; gravity = Gravity.CENTER; setTextColor(0xFF647C91.toInt())
-        })
-        return box
+Реализовано: fast-init 9600 / slow-init 5 бод, Autoscan блоков, идентификация, DTC (чтение/очистка), измерительные группы (сырые байты), базовые установки (ReadCoding 0x3E, только чтение).
+Не реализовано: запись кодов, адаптации, live-графики. Совместимость проверяется на реальном автомобиле.""")
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     private fun rounded(color: Int, tl: Int, tr: Int, br: Int, bl: Int): android.graphics.drawable.GradientDrawable =
@@ -578,18 +545,6 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun readRaw() {
-        val serial = port
-        if (serial == null) { appendLog("Connect the adapter first"); return }
-        io.execute {
-            try {
-                val buffer = ByteArray(256)
-                val n = serial.read(buffer, 500)
-                val line = if (n <= 0) "No bytes received (no ECU command was sent)" else buffer.take(n).joinToString(" ") { "%02X".format(it) }
-                runOnUiThread { appendLog("RX: $line") }
-            } catch (e: Exception) { runOnUiThread { appendLog("Read failed: ${e.message}") } }
-        }
-    }
 
     /**
      * Busy/progress overlay: a spinner dialog with the current protocol stage, so long
@@ -693,7 +648,6 @@ class MainActivity : Activity() {
             Triple(0x35, "Центральный замок", 0), Triple(0x46, "Комфорт", 0),
             Triple(0x56, "Магнитола", 0)
         )
-        controllerScanButton?.isEnabled = false
         showBusy("Список блоков", "Опрашиваю адрес 01 (1 из ${targets.size})…")
         io.execute {
             val found = mutableListOf<String>()
@@ -719,11 +673,10 @@ class MainActivity : Activity() {
             }
             runOnUiThread {
                 hideBusy()
-                appendLog("Начинаю последовательный опрос ${targets.size} адресов KW1281 (скорость подбирается по адресу, как в Васе). Это может занять несколько минут.")
+                appendLog("Autoscan: опрос ${targets.size} адресов KW1281 (скорость подбирается по адресу, как в Васе). Может занять несколько минут…")
                 appendLog("Результат опроса KW1281: успешно установлено соединений ${found.size} из ${targets.size}.")
                 if (found.isNotEmpty()) appendLog("ОТВЕТИЛИ:\n" + found.joinToString("\n\n"))
                 appendLog("НЕ ОТВЕТИЛИ ПО KW1281 (это не доказывает отсутствие блока):\n" + missed.joinToString("\n"))
-                controllerScanButton?.isEnabled = true
             }
         }
     }
@@ -753,10 +706,6 @@ class MainActivity : Activity() {
         startActivity(Intent.createChooser(intent, "Отправить журнал диагностики"))
     }
 
-    private fun unsupported(feature: String) {
-        appendLog("$feature: not implemented; no command sent")
-        Toast.makeText(this, "$feature пока не реализовано", Toast.LENGTH_SHORT).show()
-    }
 
     private fun appendLog(message: String) {
         if (!::logView.isInitialized) return

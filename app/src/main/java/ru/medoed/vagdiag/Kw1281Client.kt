@@ -229,11 +229,26 @@ class Kw1281Client(
             if (b.title == 0xE7 && b.data.isNotEmpty()) {
                 val d = b.data
                 val triples = d.asList().chunked(3).filter { it.size == 3 }
-                "Группа %03d — сырые значения (тип, A, B):\n".format(group) + triples.joinToString("\n") {
-                    "%02X  %02X  %02X".format(it[0].toInt() and 255, it[1].toInt() and 255, it[2].toInt() and 255)
-                } + "\nДекодирование формул/единиц ещё не подтверждено для этого ЭБУ."
+                "Группа %03d — сырые значения (тип, A, B):\n".format(group) + triples.mapIndexed { i, t ->
+                    "Значок %d: %02X %02X %02X".format(i + 1, t[0].toInt() and 255, t[1].toInt() and 255, t[2].toInt() and 255)
+                }.joinToString("\n") + "\nФормула пересчёта зависит от ЭБУ (в KW1281 таблиц нет; VCDS берёт их из базы). Декодирование не подтверждено."
             } else "Ответ ECU title=%02X data=%s".format(b.title, b.data.joinToString(" ") { "%02X".format(it) })
         }
+    }
+
+    /**
+     * Basic Settings (как «Basic Settings» в VCDS / «Адаптации» у Васи): команда ReadCoding 0x3E.
+     * Ответ приходит блоками title 0xF1; показываем HEX и попытку ASCII-представления.
+     */
+    @Synchronized
+    fun readBasicSettings(): String {
+        ensureConnected()
+        val blocks = request(0x3E)
+        val payload = blocks.filter { it.title == 0xF1 }.flatMap { it.data.toList() }
+        if (payload.isEmpty()) return "ЭБУ не вернул данных базовых установок (title 0xF1).\nСырые ответы:\n" + blocks.joinToString("\n") { "${it.title.toString(16).uppercase()}: ${it.hex()}" }
+        val hex = payload.joinToString(" ") { "%02X".format(it) }
+        val ascii = payload.map { c -> val v = c.toInt() and 0xFF; if (v in 0x20..0x7E) c.toInt().toChar() else '.' }.joinToString("")
+        return "Базовые установки (ReadCoding 0x3E), %d байт:\nHEX:  %s\nASCII: %s\nВнимание: запись изменений (WriteCoding 0x3F) намеренно не реализована — неверный код выведет ЭБУ из строя.".format(payload.size, hex, ascii)
     }
 
     @Synchronized
