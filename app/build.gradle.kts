@@ -20,8 +20,8 @@ android {
         applicationId = "ru.medoed.vagdiag"
         minSdk = 23
         targetSdk = 28
-        versionCode = 9
-        versionName = "0.9.0-alpha"
+        versionCode = 10
+        versionName = "1.0.0-alpha"
     }
 }
 

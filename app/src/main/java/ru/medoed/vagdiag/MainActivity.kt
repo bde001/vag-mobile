@@ -21,6 +21,7 @@ import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.appcompat.widget.PopupMenu
 import android.widget.Toast
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
@@ -206,7 +207,7 @@ class MainActivity : Activity() {
         val row1 = tileRow()
         row1.addView(tile("▦", "Список блоков", "Опрос KW1281") { scanControllers() }, tileParams())
         row1.addView(tile("⚠", "Ошибки DTC", "Двигатель · адрес 01") {
-            runDiagnostic("Подключение и чтение DTC") { client -> client.connectAuto(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate, diagnosticSettings.startBaudRate); client.readFaults() }
+            runDiagnostic("Подключение и чтение DTC") { client -> client.connectAuto(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate, diagnosticSettings.startBaudRate, fastInit = diagnosticSettings.fastInit); client.readFaults() }
         }, tileParams())
         content.addView(row1, matchWrap())
         val row2 = tileRow()
@@ -235,9 +236,9 @@ class MainActivity : Activity() {
             textSize = 12f; setTextColor(muted); setPadding(0, dp(4), 0, dp(10))
         })
         panel.addView(button("⚙ Настройки подключения", false) { showDiagnosticSettings() }, matchWrap())
-        scanButton = button("Подключиться к ЭБУ · адрес %02X".format(diagnosticSettings.ecuAddress), true) {
+        scanButton = button(connectLabel(), true) {
             runDiagnostic("Автоопределение ЭБУ") { client ->
-                val connection = client.connectAuto(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate, diagnosticSettings.startBaudRate)
+                val connection = client.connectAuto(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate, diagnosticSettings.startBaudRate, fastInit = diagnosticSettings.fastInit)
                 val identification = try { client.readIdentification() } catch (e: Exception) { "Идентификация не прочитана: ${e.message}" }
                 "$connection\nИдентификация ЭБУ:\n$identification"
             }
@@ -276,7 +277,7 @@ class MainActivity : Activity() {
         content.addView(panel, matchWrap())
 
         val warning = TextView(this).apply {
-            text = "Важно: версия экспериментальная. Поиск блоков использует только KW1281; блоки с KWP2000 могут не ответить. Измерения пока отображаются в сыром виде. Адаптации и базовые установки не реализованы. Совместимость CH340/OTG и связь с ЭБУ не подтверждены на реальном автомобиле."
+            text = "Важно: версия экспериментальная. Инициализация линии работает как в Васе: fast-init (Start Baud 9600) или slow-init (5 бод). Измерения пока отображаются в сыром виде. Адаптации и базовые установки не реализованы. Совместимость CH340/OTG и связь с ЭБУ не подтверждены на реальном автомобиле."
             textSize = 12f; setTextColor(0xFF80520B.toInt()); setPadding(dp(12), dp(12), dp(12), dp(12))
             background = rounded(0xFFFFF0D2.toInt(), 12, 12, 12, 12)
         }
@@ -298,6 +299,34 @@ class MainActivity : Activity() {
         scroll.addView(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+    }
+
+    /** Выпадающий список «как галка у Васи»: выбор из нескольких значений вместо цифрового поля. */
+    private fun dropdownField(fields: LinearLayout, label: String, options: List<Pair<String, Int>>, selectedValue: Int): () -> Int {
+        fields.addView(TextView(this).apply {
+            text = label; textSize = 13f; setTextColor(0xFF153653.toInt()); setPadding(0, dp(7), 0, dp(3))
+        })
+        val spinnerLabel = TextView(this).apply {
+            textSize = 15f; setTextColor(0xFF075CB5.toInt())
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER_VERTICAL
+            isClickable = true; isFocusable = true
+            setPadding(dp(12), dp(11), dp(12), dp(11))
+            background = rounded(0xFFF5F8FB.toInt(), 10, 10, 10, 10)
+        }
+        var selectedIndex = options.indexOfFirst { it.second == selectedValue }.coerceAtLeast(0)
+        fun render() { spinnerLabel.text = options[selectedIndex].first + "     \u25BE" }
+        render()
+        spinnerLabel.setOnClickListener { anchor ->
+            val popup = PopupMenu(this, anchor)
+            options.forEachIndexed { i, (text, _) -> popup.menu.add(0, i, i, text) }
+            popup.setOnMenuItemClickListener { item ->
+                selectedIndex = item.itemId; render(); true
+            }
+            popup.show()
+        }
+        fields.addView(spinnerLabel, LinearLayout.LayoutParams(-1, -2))
+        return { options[selectedIndex].second }
     }
 
     private fun showDiagnosticSettings() {
@@ -322,19 +351,26 @@ class MainActivity : Activity() {
             }.also { fields.addView(it, LinearLayout.LayoutParams(-1, -2)) }
         }
         val address = field("Адрес ЭБУ (двигатель обычно 01)", current.ecuAddress)
-        // Vasya Diagnost-style advanced options (labels mirror his "Protocol settings" dialog)
-        val startBaud = field("Start Baud — скорость slow-init (как в Васе: 5)", current.startBaudRate)
-        val baud = field("Скорость после инициализации: 0 = Авто (как в Васе), либо 4800/9600/10400", current.baudRate)
+        // Vasya Diagnost-style advanced options (labels mirror his "Protocol settings" dialog).
+        // Start Baud — как два варианта у Васи: 5 = slow-init, 9600 = fast-init.
+        val startBaud = dropdownField(fields, "Start Baud — режим инициализации (как в Васе)",
+            listOf("5 — slow-init (классический KW1281)" to 5, "9600 — fast-init (рекомендуется для CH340)" to 9600),
+            current.startBaudRate)
+        val baud = dropdownField(fields, "Скорость после инициализации",
+            listOf("Авто (подбор по адресу, как в Васе)" to 0, "10400" to 10400, "9600" to 9600, "4800" to 4800),
+            current.baudRate)
         val response = field("Тайм-аут ответа, мс", current.responseTimeoutMs)
         val init = field("Тайм-аут инициализации, мс", current.initTimeoutMs)
         val echoDelay = field("Echo Delay — пауза вокруг эха/ACK, мс (как в Васе: 0)", current.echoDelayMs)
         val blkDelay = field("Blk Int — задержка между блоками, мс (как в Васе: 55)", current.blockDelayMs)
         val intDelay = field("Char Int — межбайтовая задержка в блоке, мс (как в Васе: 1)", current.interByteDelayMs)
         val charIntDelay = field("Delay Char int — доп. пауза между символами, мс (как в Васе: 1)", current.charInterDelayMs)
-        val debug = field("Debug Level: 0 выкл, 1 байты TX/RX, 2 максимально подробно", current.debugLevel)
-        val retries = field("Init retry times — повторов slow-init при отсутствии ответа (1..5)", current.initRetryTimes)
+        val debug = dropdownField(fields, "Debug Level",
+            listOf("0 — выключен" to 0, "1 — байты TX/RX" to 1, "2 — максимально подробно" to 2),
+            current.debugLevel)
+        val retries = field("Init retry times — повторов инициализации при отсутствии ответа (1..5)", current.initRetryTimes)
         fields.addView(TextView(this).apply {
-            text = "Параметры и значения по умолчанию повторяют Васю Диагност (Start Baud 5, Echo Delay 0, Blk Int 55, Char Int 1). Скорость «Авто» подбирается по адресу блока, как у Васи: 01/15/17/25/35/36 → сначала 10400, остальные → сначала 9600."
+            text = "Параметры повторяют Васю Диагност. Рекомендация для USB KKL на CH340: Start Baud 9600 (fast-init) — Вася с таким кабелем тоже работает через break-импульс, а не 5 бод. Скорость «Авто» подбирается по адресу блока: 01/15/17/25/35/36 → сначала 10400, остальные → сначала 9600."
             textSize = 11f
             setTextColor(0xFF647C91.toInt())
             setPadding(0, dp(10), 0, dp(4))
@@ -347,7 +383,7 @@ class MainActivity : Activity() {
                 diagnosticSettings = VasyaDefaults.vasyaSettings(diagnosticSettings.ecuAddress)
                 diagnosticSettings.save(this)
                 kwClient = null
-                scanButton.text = "Подключиться к ЭБУ · адрес %02X".format(diagnosticSettings.ecuAddress)
+                scanButton.text = connectLabel()
                 appendLog("Настройки сброшены по умолчанию (как в Васе): ${diagnosticSettings.describe()}")
                 Toast.makeText(this, "Настройки по умолчанию восстановлены", Toast.LENGTH_SHORT).show()
             }
@@ -357,27 +393,24 @@ class MainActivity : Activity() {
                 dialog.setOnShowListener {
                     dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                         val a = address.text.toString().toIntOrNull()
-                        val sb = startBaud.text.toString().toIntOrNull()
-                        val b = baud.text.toString().toIntOrNull()
+                        val sb = startBaud()
+                        val b = baud()
                         val r = response.text.toString().toIntOrNull()
                         val i = init.text.toString().toIntOrNull()
                         val echo = echoDelay.text.toString().toIntOrNull()
                         val blk = blkDelay.text.toString().toIntOrNull()
                         val inter = intDelay.text.toString().toIntOrNull()
                         val charInt = charIntDelay.text.toString().toIntOrNull()
-                        val dbgLvl = debug.text.toString().toIntOrNull()
+                        val dbgLvl = debug()
                         val rt = retries.text.toString().toIntOrNull()
                         val error = when {
                             a == null || a !in 0..127 -> "Адрес должен быть от 0 до 127"
-                            sb == null || sb !in 1..5 -> "Start Baud: в KW1281 slow-init бывает только 5 бод (диапазон 1–5, как в Васе)"
-                            b == null || (b != 0 && b !in listOf(4800, 9600, 10400)) -> "Скорость: 0 = авто (как в Васе), либо 4800/9600/10400"
                             r == null || r !in 100..10000 -> "Тайм-аут ответа: 100–10000 мс"
                             i == null || i !in 1000..15000 -> "Тайм-аут инициализации: 1000–15000 мс"
                             echo == null || echo !in 0..100 -> "Echo delay: 0–100 мс"
-                            blk == null || blk !in 0..1000 -> "BLK: 0–1000 мс"
-                            inter == null || inter !in 0..100 -> "Int: 0–100 мс"
+                            blk == null || blk !in 0..1000 -> "Blk Int: 0–1000 мс"
+                            inter == null || inter !in 0..100 -> "Char Int: 0–100 мс"
                             charInt == null || charInt !in 0..100 -> "Delay Char int: 0–100 мс"
-                            dbgLvl == null || dbgLvl !in 0..2 -> "Debug level: 0, 1 или 2"
                             rt == null || rt !in 1..5 -> "Повторов инициализации: 1–5"
                             else -> null
                         }
@@ -386,14 +419,15 @@ class MainActivity : Activity() {
                             return@setOnClickListener
                         }
                         diagnosticSettings = DiagnosticSettings(
-                            ecuAddress = a!!, baudRate = b!!, responseTimeoutMs = r!!, initTimeoutMs = i!!,
-                            startBaudRate = sb!!, echoDelayMs = echo!!, blockDelayMs = blk!!,
+                            ecuAddress = a!!, baudRate = b, responseTimeoutMs = r!!, initTimeoutMs = i!!,
+                            startBaudRate = sb, echoDelayMs = echo!!, blockDelayMs = blk!!,
                             interByteDelayMs = inter!!, charInterDelayMs = charInt!!,
-                            debugLevel = dbgLvl!!, initRetryTimes = rt!!
+                            debugLevel = dbgLvl, initRetryTimes = rt!!,
+                            protocolMode = if (sb >= 1000) 2 else 1
                         )
                         diagnosticSettings.save(this)
                         kwClient = null
-                        scanButton.text = "Подключиться к ЭБУ · адрес %02X".format(diagnosticSettings.ecuAddress)
+                        scanButton.text = connectLabel()
                         appendLog("Настройки сохранены: ${diagnosticSettings.describe()}")
                         dialog.dismiss()
                     }
@@ -430,6 +464,11 @@ class MainActivity : Activity() {
         }
         popup.show()
     }
+
+    /** Заголовок кнопки подключения с текущим режимом инициализации — видно «как в Васе». */
+    private fun connectLabel(): String = "Подключиться к ЭБУ · адрес %02X · %s".format(
+        diagnosticSettings.ecuAddress, if (diagnosticSettings.fastInit) "fast-init 9600" else "slow-init 5 бод"
+    )
 
     private fun section(text: String) = TextView(this).apply {
         this.text = text; textSize = 11f; typeface = android.graphics.Typeface.DEFAULT_BOLD
@@ -520,15 +559,17 @@ class MainActivity : Activity() {
                 val serial = driver.ports.firstOrNull() ?: throw IOException("У адаптера нет serial-порта")
                 runOnUiThread { updateBusy("Инициализация UART…") }
                 serial.open(connection)
-                // 10400 baud is common for KWP fast-init. This is only a UART setting, not ECU initialization.
-                serial.setParameters(10400, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+                // Стартовая скорость порта — просто настройка UART; режим инициализации ЭБУ
+                // (fast/slow) выбирается при подключении по настройкам «как в Васе».
+                serial.setParameters(VasyaProtocol.FAST_INIT_BAUD, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+                VasyaProtocol.resetCache()
                 port = serial
                 kwClient = null
                 connectedDevice = device
                 runOnUiThread {
                     hideBusy()
                     status.text = "● USB-адаптер подключён"; status.setTextColor(0xFF237A45.toInt())
-                    deviceInfo.text = "USB открыт: VID %04X · PID %04X\nUART: 10400 8N1 (настройка порта, не подтверждение связи с ЭБУ)".format(Locale.US, device.vendorId, device.productId)
+                    deviceInfo.text = "USB открыт: VID %04X · PID %04X\nГотов к подключению · режим: %s".format(Locale.US, device.vendorId, device.productId, if (diagnosticSettings.fastInit) "fast-init 9600 (как в Васе)" else "slow-init 5 бод")
                     appendLog("USB serial port opened; UART configured 10400 8N1")
                     appendLog("Адаптер готов. Связь с ЭБУ ещё не установлена — нажми «Подключить ЭБУ двигателя».")
                 }
@@ -588,25 +629,28 @@ class MainActivity : Activity() {
         }
     }
 
+    /** Создаёт клиент с текущими настройками; initMode передаётся единообразно (как в Васе). */
+    private fun newClient(serial: UsbSerialPort, stagePrefix: String? = null): Kw1281Client = Kw1281Client(
+        serial,
+        { message -> runOnUiThread { appendLog(message) } },
+        responseTimeoutMs = diagnosticSettings.responseTimeoutMs,
+        initTimeoutMs = diagnosticSettings.initTimeoutMs,
+        echoDelayMs = diagnosticSettings.echoDelayMs,
+        blockDelayMs = diagnosticSettings.blockDelayMs,
+        interByteDelayMs = diagnosticSettings.interByteDelayMs,
+        charInterDelayMs = diagnosticSettings.charInterDelayMs,
+        debugLevel = diagnosticSettings.debugLevel,
+        initRetryTimes = diagnosticSettings.initRetryTimes,
+        onStage = { stage -> updateBusy(if (stagePrefix != null) "$stagePrefix $stage" else stage) }
+    )
+
     private fun runDiagnostic(label: String, action: (Kw1281Client) -> String) {
         val serial = port
         if (serial == null) { appendLog("Сначала подключи USB KKL") ; return }
         showBusy(label, "Открываю соединение с ЭБУ…")
         io.execute {
             try {
-                val client = kwClient ?: Kw1281Client(
-                    serial,
-                    { message -> runOnUiThread { appendLog(message) } },
-                    responseTimeoutMs = diagnosticSettings.responseTimeoutMs,
-                    initTimeoutMs = diagnosticSettings.initTimeoutMs,
-                    echoDelayMs = diagnosticSettings.echoDelayMs,
-                    blockDelayMs = diagnosticSettings.blockDelayMs,
-                    interByteDelayMs = diagnosticSettings.interByteDelayMs,
-                    charInterDelayMs = diagnosticSettings.charInterDelayMs,
-                    debugLevel = diagnosticSettings.debugLevel,
-                    initRetryTimes = diagnosticSettings.initRetryTimes,
-                    onStage = { stage -> updateBusy(stage) }
-                ).also { kwClient = it }
+                val client = kwClient ?: newClient(serial).also { kwClient = it }
                 val result = action(client)
                 runOnUiThread {
                     hideBusy()
@@ -661,20 +705,8 @@ class MainActivity : Activity() {
                 try {
                     try { kwClient?.disconnect() } catch (_: Exception) { }
                     kwClient = null
-                    val client = Kw1281Client(
-                        serial,
-                        { msg -> runOnUiThread { appendLog(msg) } },
-                        responseTimeoutMs = diagnosticSettings.responseTimeoutMs,
-                        initTimeoutMs = diagnosticSettings.initTimeoutMs,
-                        echoDelayMs = diagnosticSettings.echoDelayMs,
-                        blockDelayMs = diagnosticSettings.blockDelayMs,
-                        interByteDelayMs = diagnosticSettings.interByteDelayMs,
-                        charInterDelayMs = diagnosticSettings.charInterDelayMs,
-                        debugLevel = diagnosticSettings.debugLevel,
-                        initRetryTimes = diagnosticSettings.initRetryTimes,
-                        onStage = { stage -> updateBusy("«$label» (${index + 1}/${targets.size}): $stage") }
-                    )
-                    val handshake = client.connectAuto(address, baud, diagnosticSettings.startBaudRate)
+                    val client = newClient(serial, "«$label» (${index + 1}/${targets.size}):")
+                    val handshake = client.connectAuto(address, baud, diagnosticSettings.startBaudRate, fastInit = diagnosticSettings.fastInit)
                     kwClient = client
                     val identification = try { client.readIdentification() } catch (e: Exception) { "Идентификация не прочитана: ${e.message}" }
                     found += "%02X — %s\n%s\n%s".format(address, label, identification, handshake)
@@ -734,6 +766,7 @@ class MainActivity : Activity() {
     }
 
     private fun closePort() {
+        VasyaProtocol.resetCache()
         try { kwClient?.disconnect() } catch (_: Exception) {}
         kwClient = null
         try { port?.close() } catch (_: Exception) {}

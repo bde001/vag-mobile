@@ -14,7 +14,11 @@ data class DiagnosticSettings(
     val baudRate: Int = 0,
     val responseTimeoutMs: Int = 1000,
     val initTimeoutMs: Int = 5000,
-    /** Start Baud: bit-rate knob of the KW1281 slow-init wake-up (Vasya default: 5). */
+    /**
+     * Start Baud — как в Васе Диагносте: 5 = KW1281 slow-init (кадр адреса на 5 бод),
+     * 9600 = fast-init (break-импульс на 9600, ЭБУ сам начинает слать синхру).
+     * Именно «Start Baud 9600 + Echo Delay 0» у Васи работает с CH340 без поддержки 5 бод.
+     */
     val startBaudRate: Int = VasyaDefaults.START_BAUD,
     /** Echo delay (Vasya "Echo Delay"): pause around echo/ACK handling. Vasya default: 0. */
     val echoDelayMs: Int = 0,
@@ -27,8 +31,12 @@ data class DiagnosticSettings(
     /** Debug level: 0 = off, 1 = normal TX/RX byte log, 2 = verbose handshake timing. */
     val debugLevel: Int = 0,
     /** Init retry times: how many slow-init attempts before giving up (Vasya-style knob). */
-    val initRetryTimes: Int = 2
+    val initRetryTimes: Int = 2,
+    /** 0 = авто (подбирается по Start Baud), 1 = KWP-1281 slow-init, 2 = KWP-2000 fast-init. */
+    val protocolMode: Int = 0
 ) {
+    /** Fast-init активен: явно выбран режим 2 или Start Baud >= 1000 (как 9600 у Васи). */
+    val fastInit: Boolean get() = protocolMode == 2 || (protocolMode == 0 && startBaudRate >= 1000)
     fun save(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt("ecu_address", ecuAddress)
@@ -45,24 +53,38 @@ data class DiagnosticSettings(
             // Маркер версии настроек: старые сборки могли сохранить Start Baud=9600 из-за
             // кривого дефолта — при обновлении один раз сбрасываем на васьины значения.
             .putInt("settings_schema", SETTINGS_SCHEMA)
+            // Протокол по умолчанию: KWP-1281 (как галки в Васе); fast-init включается
+            // значением Start Baud = 9600 либо явным выбором режима.
+            .putInt("protocol_mode", protocolMode)
             .apply()
     }
 
     /** Concise one-line summary for the diagnostic log when settings are saved. */
     fun describe(): String =
-        "адрес %02X, старт %d бод, пост-init %s, echo %d мс, Blk Int %d мс, Char Int %d мс, DelayCharInt %d мс, Debug %d, повторов инициализации %d".format(
-            ecuAddress, startBaudRate, if (baudRate == 0) "авто по адресу (как в Васе)" else "$baudRate бод",
+        "адрес %02X, старт %d бод (%s), пост-init %s, echo %d мс, Blk Int %d мс, Char Int %d мс, DelayCharInt %d мс, Debug %d, повторов инициализации %d".format(
+            ecuAddress, startBaudRate, if (fastInit) "fast-init" else "slow-init",
+            if (baudRate == 0) "авто по адресу (как в Васе)" else "$baudRate бод",
             echoDelayMs, blockDelayMs,
             interByteDelayMs, charInterDelayMs, debugLevel, initRetryTimes
         )
 
     companion object {
         private const val PREFS = "vag_diag_settings"
-        private const val SETTINGS_SCHEMA = 2
+        // Schema 3: добавлены protocol_mode и васькины диапазоны Start Baud (5 или 9600).
+        private const val SETTINGS_SCHEMA = 3
 
-        /** Vasya-style defaults; Start Baud outside 1..5 is always forced back to 5. */
-        private fun sanitize(s: DiagnosticSettings): DiagnosticSettings =
-            if (s.startBaudRate !in 1..5) s.copy(startBaudRate = VasyaDefaults.START_BAUD) else s
+        /**
+         * Sanitize как в Васе: Start Baud принимает только его два реальных значения —
+         * 5 (slow-init) или 9600 (fast-init). Всё остальное чинится ближайшим осмысленным.
+         */
+        private fun sanitize(s: DiagnosticSettings): DiagnosticSettings {
+            val sb = when {
+                s.startBaudRate in 1..5 -> 5
+                s.startBaudRate >= 4800 -> VasyaProtocol.FAST_INIT_BAUD
+                else -> VasyaDefaults.START_BAUD
+            }
+            return s.copy(startBaudRate = sb)
+        }
 
         fun load(context: Context): DiagnosticSettings {
             val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -82,7 +104,8 @@ data class DiagnosticSettings(
                 interByteDelayMs = p.getInt("inter_byte_delay_ms", 1),
                 charInterDelayMs = p.getInt("char_inter_delay_ms", 1),
                 debugLevel = p.getInt("debug_level", 0),
-                initRetryTimes = p.getInt("init_retry_times", 2)
+                initRetryTimes = p.getInt("init_retry_times", 2),
+                protocolMode = p.getInt("protocol_mode", 0)
             ))
         }
     }
