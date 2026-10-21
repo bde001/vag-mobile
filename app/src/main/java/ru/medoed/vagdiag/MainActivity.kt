@@ -87,7 +87,7 @@ class MainActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(permissionReceiver, filter)
         }
-        appendLog("VAG Diag Android 0.6.0-alpha started")
+        appendLog("VAG Diag Android 0.7.0-alpha started")
         appendLog("Target: Golf IV 1.6 16V BCB / USB KKL CH340")
         appendLog("No ECU data is fabricated. Diagnostic protocol support is not yet validated.")
         refreshDevices()
@@ -369,7 +369,7 @@ class MainActivity : Activity() {
                         val rt = retries.text.toString().toIntOrNull()
                         val error = when {
                             a == null || a !in 0..127 -> "Адрес должен быть от 0 до 127"
-                            sb == null || sb !in 1..115200 -> "Start Baud: от 1 до 115200 (обычно 5)"
+                            sb == null || sb !in 1..5 -> "Start Baud: в KW1281 slow-init бывает только 5 бод (диапазон 1–5, как в Васе)"
                             b == null || (b != 0 && b !in listOf(4800, 9600, 10400)) -> "Скорость: 0 = авто (как в Васе), либо 4800/9600/10400"
                             r == null || r !in 100..10000 -> "Тайм-аут ответа: 100–10000 мс"
                             i == null || i !in 1000..15000 -> "Тайм-аут инициализации: 1000–15000 мс"

@@ -42,6 +42,9 @@ data class DiagnosticSettings(
             .putInt("char_inter_delay_ms", charInterDelayMs)
             .putInt("debug_level", debugLevel)
             .putInt("init_retry_times", initRetryTimes)
+            // Маркер версии настроек: старые сборки могли сохранить Start Baud=9600 из-за
+            // кривого дефолта — при обновлении один раз сбрасываем на васьины значения.
+            .putInt("settings_schema", SETTINGS_SCHEMA)
             .apply()
     }
 
@@ -55,11 +58,20 @@ data class DiagnosticSettings(
 
     companion object {
         private const val PREFS = "vag_diag_settings"
+        private const val SETTINGS_SCHEMA = 2
+
+        /** Vasya-style defaults; Start Baud outside 1..5 is always forced back to 5. */
+        private fun sanitize(s: DiagnosticSettings): DiagnosticSettings =
+            if (s.startBaudRate !in 1..5) s.copy(startBaudRate = VasyaDefaults.START_BAUD) else s
+
         fun load(context: Context): DiagnosticSettings {
             val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             // First launch (or after clearing app data): fall back to Vasya Diagnost defaults.
             if (!p.contains("ecu_address")) return VasyaDefaults.vasyaSettings()
-            return DiagnosticSettings(
+            // Миграция: если настройки сохранены старой версией (schema < 2) или там стоит
+            // невалидный Start Baud вроде 9600 — чиним молча при загрузке.
+            if (p.getInt("settings_schema", 1) < SETTINGS_SCHEMA) return VasyaDefaults.vasyaSettings()
+            return sanitize(DiagnosticSettings(
                 ecuAddress = p.getInt("ecu_address", 1),
                 baudRate = p.getInt("baud_rate", 0),
                 responseTimeoutMs = p.getInt("response_timeout_ms", 1000),
@@ -71,7 +83,7 @@ data class DiagnosticSettings(
                 charInterDelayMs = p.getInt("char_inter_delay_ms", 1),
                 debugLevel = p.getInt("debug_level", 0),
                 initRetryTimes = p.getInt("init_retry_times", 2)
-            )
+            ))
         }
     }
 }

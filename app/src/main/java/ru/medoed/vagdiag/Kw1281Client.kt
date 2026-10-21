@@ -71,25 +71,20 @@ class Kw1281Client(
         connected = false
         if (address !in 0..0x7F) throw IllegalArgumentException("KW1281 address must be 0..127")
         if (baudRate !in setOf(4800, 9600, 10400)) throw IllegalArgumentException("Supported post-init baud rates: 4800, 9600, 10400")
-        // Start Baud controls the bit time of the slow-init wake-up. Valid KW1281 slow-init
-        // is ~5 baud; Vasya Diagnost exposes this knob for KKL cables whose actual line
-        // timing deviates from the nominal value, so anything in 1..115200 is accepted here.
-        if (startBaudRate !in 1..115200) throw IllegalArgumentException("Start Baud must be 1..115200")
+        // Start Baud controls the bit time of the slow-init wake-up. KW1281 slow-init is a
+        // fixed 5-baud frame (Vasya Diagnost keeps it in 1..5 for slightly off KKL lines).
+        if (startBaudRate !in 1..5) throw IllegalArgumentException("Start Baud must be 1..5 (KW1281 slow-init is a fixed 5-baud wake-up)")
         val startBitMs = 1000L / startBaudRate
-        // Как в Vasya Diagnost / kw1281test: линия остаётся на пост-init скорости, а
-        // slow-init формируется удержанием BREAK нужной длительности (бит ≈ Start Baud).
-        // Ставить реальные 5 бод через setParameters драйверы CH340 отказываются
-        // ("Unsupported baud rate: 5"), поэтому этот путь основной.
+        // ВАЖНО (проверено по исходникам usb-serial-for-android 3.8.1): чипы CH340 аппаратно
+        // умеют baud base 1532620800 >> 29 = 2.85 бита/с, т.е. РЕАЛЬНЫЕ 5 бод работают прямо
+        // через setParameters(5,...) — ровно так делает kw1281test. А вот их реализация
+        // setBreak() сломана (read-modify-write регистра 0x1805) и роняет линию в break,
+        // из-за чего ЭБУ «залипает» и больше не отвечает (симптом: пара щелчков реле — тишина).
+        // Поэтому основной путь — честный кадр 5 бод 7O1; BREAK используется только если
+        // драйвер принципиально не принимает низкую скорость.
         setLineParamsQuietly(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-        // Драйвер может молча игнорировать setBreak() (некоторые сборки CH340). Проверяем
-        // это и предупреждаем, но основной путь — BREAK на линии.
-        val breakSupported = probeBreak()
-        if (!breakSupported) {
-            log("ВНИМАНИЕ: USB-драйвер не поддерживает setBreak() — медленный старт имитируется " +
-                "UART-кадром 7O1 на 5 бод (как в kw1281test).")
-        }
-        dbgVerbose("Slow-init: линия $baudRate бод, BREAK-бит ≈${startBitMs} мс (Start Baud=$startBaudRate), echo=${echoDelayMs}мс, BLK=${blockDelayMs}мс, Int=${interByteDelayMs}мс, DelayCharInt=${charInterDelayMs}мс")
-        var usedBitBang = false
+        val lowBaudSupported = checkLowBaudSupport(baudRate)
+        dbgVerbose("Slow-init: режим=${if (lowBaudSupported) "реальный кадр 5 бод 7O1" else "BREAK-бит ≈${startBitMs} мс"} (Start Baud=$startBaudRate), пост-init $baudRate бод, echo=${echoDelayMs}мс, BLK=${blockDelayMs}мс, Int=${interByteDelayMs}мс, DelayCharInt=${charInterDelayMs}мс")
         var firstAttempt = true
         var lastError: IOException? = null
         var sync: Int? = null
@@ -105,19 +100,17 @@ class Kw1281Client(
                 // Пауза между попытками, как в kw1281test: даём ЭБУ отпустить линию.
                 Thread.sleep(500L * attempt)
                 setLineParamsQuietly(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+                if (lowBaudSupported) checkLowBaudSupport(baudRate)
             }
             firstAttempt = false
-            if (breakSupported) {
-                try {
-                    sendSlowInitBreak(address, startBitMs)
-                } catch (_: UnsupportedOperationException) {
-                    usedBitBang = true
-                    sendSlowInitBitBang(address)
-                }
+            if (lowBaudSupported) {
+                sendSlowInitFiveBaud(address)
             } else {
-                usedBitBang = true
-                sendSlowInitBitBang(address)
+                sendSlowInitBreak(address, startBitMs)
             }
+            // Возврат на пост-init скорость ДО чтения: ЭБУ шлёт синхру сразу после медленного
+            // старта именно на ней (10400/9600), читать на 5 бод смысла нет.
+            setLineParamsQuietly(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
             pause(blockDelayMs)
             drainRx()
             stage("Ожидание синхры 0x55 (до ${initTimeoutMs} мс)…")
@@ -127,7 +120,7 @@ class Kw1281Client(
                 lastError = e
             }
         }
-        if (sync == null) throw IOException(buildNoConnectionHint(address, startBaudRate, baudRate, usedBitBang || !breakSupported), lastError)
+        if (sync == null) throw IOException(buildNoConnectionHint(address, startBaudRate, baudRate, !lowBaudSupported), lastError)
         val syncByte = sync!!
         if (syncByte != 0x55) {
             val hint = if (syncByte == 0xFF || syncByte == 0x00)
@@ -323,47 +316,66 @@ class Kw1281Client(
     }
 
     /**
-     * Проверяет, реально ли драйвер умеет setBreak(). Некоторые CH340-сборки бросают
-     * UnsupportedOperationException, другие принимают вызов молча, но линию не держат.
+     * Проверяет, принимает ли драйвер реальную скорость slow-init (5 бод). У CH340 в
+     * usb-serial-for-android это работает аппаратно (baud base >> 3 = 191577600, делитель
+     * до 2^24 → вплоть до ~2.85 бита/с), см. setBaudRate() в Ch34xSerialDriver. Если
+     * проверка прошла — используем честный кадр 5 бод 7O1 как kw1281test/Vasya; если нет
+     * (другой чип) — откатываемся на BREAK.
      */
-    private fun probeBreak(): Boolean = try {
-        port.setBreak(true)
-        Thread.sleep(5)
-        port.setBreak(false)
-        true
-    } catch (_: Exception) {
-        false
+    private fun checkLowBaudSupport(postInitBaud: Int): Boolean {
+        return try {
+            port.setParameters(5, 7, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_ODD)
+            dbg("Драйвер принял 5 бод 7O1 — slow-init честным медленным кадром (как в kw1281test)")
+            true
+        } catch (e: Exception) {
+            log("setParameters(5 бод) не удался (${e.javaClass.simpleName}: ${e.message}) — перехожу на BREAK-инициализацию")
+            // Возвращаем линию в рабочий режим, чтобы следующий setBreak/probe не падал на мусоре.
+            try { port.setParameters(postInitBaud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE) } catch (_: Exception) { }
+            false
+        }
     }
 
-    /** Slow-init через BREAK: 8 бит (st + 7 данных + odd parity + stop), бит ≈ startBitMs мс. */
+    /**
+     * Slow-init как в kw1281test/Vasya Diagnost: реальный UART-кадр на 5 бод, 7 данных
+     * битов + odd parity + 1 stop. Байт адреса (0x01 для двигателя) на 5 бод идёт ~2.2 с —
+     * поэтому write блокируется до initTimeout*2 мс. Линия уже настроена checkLowBaudSupport().
+     */
+    private fun sendSlowInitFiveBaud(address: Int) {
+        try {
+            port.setParameters(5, 7, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_ODD)
+            val b = (address and 0x7F).toByte()
+            dbgVerbose("Slow-init 5 бод 7O1: TX байт %02X (~2.2 с на линию)".format(b))
+            stage("Медленный старт 5 бод (~2 с)…")
+            port.write(byteArrayOf(b), initTimeoutMs * 2)
+        } catch (e: IOException) {
+            throw IOException("Не удалось отправить slow-init кадр на 5 бод: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Fallback для драйверов без поддержки низких скоростей: BREAK побитово.
+     * ВНИМАНИЕ: у CH340 в usb-serial-for-android 3.8.1 setBreak() содержит баг
+     * (read-modify-write регистра 0x1805) и может оставить линию в break — после
+     * такого пути ЭБУ иногда «залипает» до переподключения адаптера.
+     */
     private fun sendSlowInitBreak(address: Int, startBitMs: Long) {
         val frame = mutableListOf(0) // start bit
         for (i in 0..6) frame.add((address shr i) and 1)
         val dataOnes = (0..6).count { ((address shr it) and 1) == 1 }
         frame += if (dataOnes % 2 == 0) 1 else 0 // odd parity
         frame += 1 // stop bit
-        dbgVerbose("Slow-init BREAK: адрес %02X, побитово ${frame.joinToString("")}" /* e.g. 010000011 */)
-        for (bit in frame) {
-            port.setBreak(bit == 0)
-            Thread.sleep(startBitMs)
-        }
-        port.setBreak(false)
-    }
-
-    /**
-     * Fallback без BREAK — как в kw1281test/Vasya: реальный UART-кадр на 5 бод, 7E1/7O1.
-     * Байт на 5 бод идёт ~2 с, поэтому пишем с удвоенным initTimeout.
-     */
-    private fun sendSlowInitBitBang(address: Int) {
+        dbgVerbose("Slow-init BREAK fallback: адрес %02X, побитово ${frame.joinToString("")}, бит ≈${startBitMs} мс")
         try {
-            port.setParameters(5, 7, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_ODD)
-            dbg("setBreak недоступен — slow-init кадром 7O1 на 5 бод")
-            port.write(byteArrayOf((address and 0x7F).toByte()), initTimeoutMs * 2)
+            for (bit in frame) {
+                port.setBreak(bit == 0)
+                Thread.sleep(startBitMs.coerceAtLeast(1L))
+            }
+            port.setBreak(false)
         } catch (e: Exception) {
-            throw IOException(
-                "Не удалось выполнить slow-init: драйвер USB-порта не поддерживает ни setBreak(), " +
-                    "ни установку 5 бод. Типичная причина — дешёвый CH340-«KKL» кабель или неподдерживаемый чип.", e
-            )
+            // Гарантированно отпускаем линию, иначе ЭБУ останется в заложниках у break.
+            try { port.setBreak(false) } catch (_: Exception) { }
+            throw IOException("BREAK-инициализация не удалась (${e.javaClass.simpleName}: ${e.message}). " +
+                "Драйвер не поддерживает ни 5 бод, ни setBreak() — нужен другой KKL-адаптер.", e)
         }
     }
 
@@ -379,7 +391,7 @@ class Kw1281Client(
     private fun buildNoConnectionHint(address: Int, startBaudRate: Int, baudRate: Int, usedBitBangFallback: Boolean): String = buildString {
         appendLine("ЭБУ не ответил на slow-init (адрес %02X, старт %d бод, пост-init %d бод). Порт открыт, но K-Line молчит.".format(address, startBaudRate, baudRate))
         appendLine("Частые причины:")
-        if (usedBitBangFallback) appendLine("  драйвер не поддержал setBreak(), использован fallback-кадр 5 бод — проверь, что линия реально работает на такой низкой скорости.")
+        if (usedBitBangFallback) appendLine("  драйвер не принял 5 бод — использован запасной BREAK-путь; если после неудачи адаптер «залип», переткни USB (у CH340 баг setBreak).")
         appendLine("• Зажигание выключено или ЭБУ не питается (проверь предохранитель, включи зажигание перед подключением).")
         appendLine("• Неверный адрес блока или другой протокол (KWP2000/CAN вместо KW1281).")
         appendLine("• Попробуй: другую скорость пост-init (9600/4800), увеличить Init retry times до 3–5, Debug level=2 для подробного лога.")
