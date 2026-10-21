@@ -7,6 +7,15 @@ android {
     namespace = "ru.medoed.vagdiag"
     compileSdk = 35
 
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
     defaultConfig {
         applicationId = "ru.medoed.vagdiag"
         minSdk = 23
