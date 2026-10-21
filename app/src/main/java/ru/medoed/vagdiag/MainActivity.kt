@@ -51,7 +51,7 @@ class MainActivity : Activity() {
     private lateinit var adaptButton: Button
     private lateinit var shareLogButton: Button
     private lateinit var groupInput: EditText
-    private var kwClient: Kw1281Client? = null
+    private var kwClient: Kw1281Client? = null\n    private lateinit var diagnosticSettings: DiagnosticSettings
     private var port: UsbSerialPort? = null
     private var connectedDevice: UsbDevice? = null
     private val io = Executors.newSingleThreadExecutor()
@@ -73,7 +73,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
+        usbManager = getSystemService(Context.USB_SERVICE) as UsbManager\n        diagnosticSettings = DiagnosticSettings.load(this)
         buildUi()
         val filter = IntentFilter(actionUsbPermission)
         if (Build.VERSION.SDK_INT >= 33) {
@@ -201,7 +201,7 @@ class MainActivity : Activity() {
         val row1 = tileRow()
         row1.addView(tile("▦", "Список блоков", "Опрос KW1281") { scanControllers() }, tileParams())
         row1.addView(tile("⚠", "Ошибки DTC", "Двигатель · адрес 01") {
-            runDiagnostic("Подключение и чтение DTC") { client -> client.connect(0x01, 9600); client.readFaults() }
+            runDiagnostic("Подключение и чтение DTC") { client -> client.connect(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate); client.readFaults() }
         }, tileParams())
         content.addView(row1, matchWrap())
         val row2 = tileRow()
@@ -229,8 +229,9 @@ class MainActivity : Activity() {
             text = "Сначала установи соединение с USB-адаптером, затем попробуй подключиться к ЭБУ."
             textSize = 12f; setTextColor(muted); setPadding(0, dp(4), 0, dp(10))
         })
-        scanButton = button("Подключиться к ЭБУ · адрес 01", true) {
-            runDiagnostic("Подключение ЭБУ") { client -> client.connect(0x01, 9600) }
+        panel.addView(button("⚙ Настройки подключения", false) { showDiagnosticSettings() }, matchWrap())
+        scanButton = button("Подключиться к ЭБУ · адрес %02X".format(diagnosticSettings.ecuAddress), true) {
+            runDiagnostic("Подключение ЭБУ") { client -> client.connect(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate) }
         }
         panel.addView(scanButton, matchWrap())
         panel.addView(button("Прочитать идентификацию ЭБУ", false) {
@@ -288,6 +289,78 @@ class MainActivity : Activity() {
         scroll.addView(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+    }
+
+    private fun showDiagnosticSettings() {
+        val current = diagnosticSettings
+        val fields = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(4), dp(18), dp(4))
+        }
+        fun field(label: String, value: Int, inputType: Int = android.text.InputType.TYPE_CLASS_NUMBER): EditText {
+            fields.addView(TextView(this).apply {
+                text = label
+                textSize = 13f
+                setTextColor(0xFF153653.toInt())
+                setPadding(0, dp(7), 0, dp(3))
+            })
+            return EditText(this).apply {
+                setSingleLine(true)
+                this.inputType = inputType
+                setText(value.toString())
+                textSize = 15f
+                setPadding(dp(10), dp(8), dp(10), dp(8))
+            }.also { fields.addView(it, LinearLayout.LayoutParams(-1, -2)) }
+        }
+        val address = field("Адрес ЭБУ (двигатель обычно 01)", current.ecuAddress)
+        val baud = field("Скорость после инициализации, бод", current.baudRate)
+        val response = field("Тайм-аут ответа, мс", current.responseTimeoutMs)
+        val init = field("Тайм-аут инициализации, мс", current.initTimeoutMs)
+        val scroll = ScrollView(this).apply { addView(fields) }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Настройки подключения")
+            .setView(scroll)
+            .setNeutralButton("По умолчанию") { _, _ ->
+                diagnosticSettings = DiagnosticSettings()
+                diagnosticSettings.save(this)
+                kwClient = null
+                scanButton.text = "Подключиться к ЭБУ · адрес %02X".format(diagnosticSettings.ecuAddress)
+                appendLog("Настройки сброшены: адрес 01, 9600 бод, тайм-аут ответа 1000 мс, инициализации 5000 мс")
+                Toast.makeText(this, "Настройки по умолчанию восстановлены", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Отмена", null)
+            .setPositiveButton("Сохранить", null)
+            .create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val a = address.text.toString().toIntOrNull()
+                        val b = baud.text.toString().toIntOrNull()
+                        val r = response.text.toString().toIntOrNull()
+                        val i = init.text.toString().toIntOrNull()
+                        val error = when {
+                            a == null || a !in 0..127 -> "Адрес должен быть от 0 до 127"
+                            b == null || b !in listOf(4800, 9600, 10400) -> "Скорость: 4800, 9600 или 10400"
+                            r == null || r !in 100..10000 -> "Тайм-аут ответа: 100–10000 мс"
+                            i == null || i !in 1000..15000 -> "Тайм-аут инициализации: 1000–15000 мс"
+                            else -> null
+                        }
+                        if (error != null) {
+                            Toast.makeText(this, error, Toast.LENGTH_LONG).show()
+                            return@setOnClickListener
+                        }
+                        diagnosticSettings = DiagnosticSettings(a!!, b!!, r!!, i!!)
+                        diagnosticSettings.save(this)
+                        kwClient = null
+                        scanButton.text = "Подключиться к ЭБУ · адрес %02X".format(diagnosticSettings.ecuAddress)
+                        appendLog("Настройки сохранены: адрес %02X, %d бод, ответ %d мс, инициализация %d мс".format(
+                            diagnosticSettings.ecuAddress, diagnosticSettings.baudRate,
+                            diagnosticSettings.responseTimeoutMs, diagnosticSettings.initTimeoutMs
+                        ))
+                        dialog.dismiss()
+                    }
+                }
+                dialog.show()
+            }
     }
 
     private fun showNavigationMenu(anchor: View) {
@@ -440,7 +513,12 @@ class MainActivity : Activity() {
         if (serial == null) { appendLog("Сначала подключи USB KKL") ; return }
         io.execute {
             try {
-                val client = kwClient ?: Kw1281Client(serial) { message -> runOnUiThread { appendLog(message) } }.also { kwClient = it }
+                val client = kwClient ?: Kw1281Client(
+                    serial,
+                    { message -> runOnUiThread { appendLog(message) } },
+                    diagnosticSettings.responseTimeoutMs,
+                    diagnosticSettings.initTimeoutMs
+                ).also { kwClient = it }
                 val result = action(client)
                 runOnUiThread {
                     appendLog("$label — результат:\n$result")

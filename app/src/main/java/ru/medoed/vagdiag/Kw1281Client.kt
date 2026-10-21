@@ -4,7 +4,12 @@ import com.hoho.android.usbserial.driver.UsbSerialPort
 import java.io.IOException
 
 /** Minimal KW1281 tester implementation. Must be validated against a real ECU/cable before relying on it. */
-class Kw1281Client(private val port: UsbSerialPort, private val log: (String) -> Unit) {
+class Kw1281Client(
+    private val port: UsbSerialPort,
+    private val log: (String) -> Unit,
+    private val responseTimeoutMs: Int = 1000,
+    private val initTimeoutMs: Int = 5000
+) {
     data class Block(val counter: Int, val title: Int, val data: ByteArray) {
         fun hex(): String = (byteArrayOf(counter.toByte(), title.toByte()) + data).joinToString(" ") { "%02X".format(it) }
     }
@@ -16,7 +21,6 @@ class Kw1281Client(private val port: UsbSerialPort, private val log: (String) ->
     fun connect(address: Int = 0x01, baudRate: Int = 9600): String {
         if (address !in 0..0x7F) throw IllegalArgumentException("KW1281 address must be 0..127")
         if (baudRate !in setOf(4800, 9600, 10400)) throw IllegalArgumentException("Supported post-init baud rates: 4800, 9600, 10400")
-        port.purgeHwBuffers(true, true)
         port.setParameters(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
         // KW1281 slow init: 7 data bits, odd parity, 1 stop bit, 5 baud.
         // Some USB-serial drivers (including some CH340 builds) do not implement setBreak().
@@ -36,7 +40,7 @@ class Kw1281Client(private val port: UsbSerialPort, private val log: (String) ->
         } catch (_: UnsupportedOperationException) {
             try {
                 port.setParameters(5, 7, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_ODD)
-                port.write(byteArrayOf((address and 0x7F).toByte()), 5000)
+                port.write(byteArrayOf((address and 0x7F).toByte()), initTimeoutMs)
             } catch (e: Exception) {
                 throw IOException(
                     "CH340/USB-драйвер не поддерживает setBreak() и не смог передать slow-init на 5 бод. " +
@@ -47,10 +51,10 @@ class Kw1281Client(private val port: UsbSerialPort, private val log: (String) ->
         Thread.sleep(30)
         // Return to the configured post-init speed before reading ECU sync.
         port.setParameters(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-        val sync = readByte(1800)
+        val sync = readByte(initTimeoutMs)
         if (sync != 0x55) throw IOException("ECU did not return KW1281 sync 55 (received %02X)".format(sync))
-        val key1 = readByte(1000)
-        val key2 = readByte(1000)
+        val key1 = readByte(responseTimeoutMs)
+        val key2 = readByte(responseTimeoutMs)
         val protocolVersion = ((key2 and 0x7F) shl 7) or (key1 and 0x7F)
         log("Sync 55; keywords %02X %02X; calculated protocol KWP%04d; baud=%d".format(key1, key2, protocolVersion, baudRate))
         Thread.sleep(25)
@@ -158,7 +162,7 @@ class Kw1281Client(private val port: UsbSerialPort, private val log: (String) ->
         counter = (counter + 1) and 0xFF
         bytes.forEach { value ->
             writeRaw(value)
-            val ack = readByte(500)
+            val ack = readByte(responseTimeoutMs)
             if (ack != (value.inv() and 0xFF)) throw IOException("KW1281 ACK mismatch for %02X: got %02X".format(value, ack))
             Thread.sleep(1)
         }
@@ -173,14 +177,14 @@ class Kw1281Client(private val port: UsbSerialPort, private val log: (String) ->
         val title = readAndAck()
         val data = ByteArray((length - 3).coerceAtLeast(0))
         for (i in data.indices) data[i] = readAndAck().toByte()
-        val end = readByte(1000)
+        val end = readByte(responseTimeoutMs)
         if (end != 0x03) throw IOException("Invalid KW1281 block terminator %02X".format(end))
         counter = (receivedCounter + 1) and 0xFF
         return Block(receivedCounter, title, data)
     }
 
     private fun readAndAck(): Int {
-        val b = readByte(1000)
+        val b = readByte(responseTimeoutMs)
         Thread.sleep(5)
         writeRaw(b.inv() and 0xFF)
         return b
