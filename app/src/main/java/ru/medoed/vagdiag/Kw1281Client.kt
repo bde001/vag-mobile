@@ -71,31 +71,34 @@ class Kw1281Client(
         // timing deviates from the nominal value, so anything in 1..115200 is accepted here.
         if (startBaudRate !in 1..115200) throw IllegalArgumentException("Start Baud must be 1..115200")
         val startBitMs = 1000L / startBaudRate
-        // ВАЖНО: перед slow-init порт обязан работать на 5 бод! На 10400 бит BREAK длится
-        // доли миллисекунды, ЭБУ его не видит и молчит — ровно симптом «реле щёлкает,
-        // связи нет». Вася Диагност/kw1281test тоже ставят 5 бод до wake-up кадра.
-        setLineParamsQuietly(5, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+        // Как в Vasya Diagnost / kw1281test: линия остаётся на пост-init скорости, а
+        // slow-init формируется удержанием BREAK нужной длительности (бит ≈ Start Baud).
+        // Ставить реальные 5 бод через setParameters драйверы CH340 отказываются
+        // ("Unsupported baud rate: 5"), поэтому этот путь основной.
+        setLineParamsQuietly(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
         // Драйвер может молча игнорировать setBreak() (некоторые сборки CH340). Проверяем
-        // это и предупреждаем, но основной путь — BREAK на линии, уже выставленной в 5 бод.
+        // это и предупреждаем, но основной путь — BREAK на линии.
         val breakSupported = probeBreak()
         if (!breakSupported) {
-            log("ВНИМАНИЕ: USB-драйвер не поддерживает setBreak() — медленный старт 5 бод имитируется " +
+            log("ВНИМАНИЕ: USB-драйвер не поддерживает setBreak() — медленный старт имитируется " +
                 "UART-кадром 7O1 на 5 бод (как в kw1281test).")
         }
-        dbgVerbose("Slow-init: линия 5 бод, Start Baud=$startBaudRate (бит ≈${startBitMs} мс), пост-init baud=$baudRate, echo=${echoDelayMs}мс, BLK=${blockDelayMs}мс, Int=${interByteDelayMs}мс, DelayCharInt=${charInterDelayMs}мс")
+        dbgVerbose("Slow-init: линия $baudRate бод, BREAK-бит ≈${startBitMs} мс (Start Baud=$startBaudRate), echo=${echoDelayMs}мс, BLK=${blockDelayMs}мс, Int=${interByteDelayMs}мс, DelayCharInt=${charInterDelayMs}мс")
         var usedBitBang = false
         var firstAttempt = true
         var lastError: IOException? = null
         var sync: Int? = null
         var attempt = 0
         val retries = initRetries.coerceIn(1, 5)
-        // Как в kw1281test/Vasya Diagnost: при отсутствии синхры повторяем slow-init с нуля
-        // (линия снова в 5 бод) — часть ЭБУ просыпается только со второго импульса.
+        // Как в kw1281test/Vasya Diagnost: при отсутствии синхры повторяем slow-init с нуля —
+        // часть ЭБУ просыпается только со второго импульса.
         while (sync == null && attempt < retries) {
             attempt++
             if (!firstAttempt) {
                 log("Нет ответа ЭБУ за ${initTimeoutMs} мс (попытка $attempt/$retries) — повторяю slow-init…")
-                setLineParamsQuietly(5, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+                // Пауза между попытками, как в kw1281test: даём ЭБУ отпустить линию.
+                Thread.sleep(500L * attempt)
+                setLineParamsQuietly(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
             }
             firstAttempt = false
             if (breakSupported) {
@@ -110,8 +113,6 @@ class Kw1281Client(
                 sendSlowInitBitBang(address)
             }
             pause(blockDelayMs)
-            // Возврат к пост-init скорости и чтение синхры
-            setLineParamsQuietly(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
             drainRx()
             try {
                 sync = readByte(initTimeoutMs)
