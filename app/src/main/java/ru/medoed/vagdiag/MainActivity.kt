@@ -51,7 +51,8 @@ class MainActivity : Activity() {
     private lateinit var adaptButton: Button
     private lateinit var shareLogButton: Button
     private lateinit var groupInput: EditText
-    private var kwClient: Kw1281Client? = null\n    private lateinit var diagnosticSettings: DiagnosticSettings
+    private var kwClient: Kw1281Client? = null
+    private lateinit var diagnosticSettings: DiagnosticSettings
     private var port: UsbSerialPort? = null
     private var connectedDevice: UsbDevice? = null
     private val io = Executors.newSingleThreadExecutor()
@@ -73,7 +74,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        usbManager = getSystemService(Context.USB_SERVICE) as UsbManager\n        diagnosticSettings = DiagnosticSettings.load(this)
+        usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
+        diagnosticSettings = DiagnosticSettings.load(this)
         buildUi()
         val filter = IntentFilter(actionUsbPermission)
         if (Build.VERSION.SDK_INT >= 33) {
@@ -569,7 +571,12 @@ class MainActivity : Activity() {
                 try {
                     try { kwClient?.disconnect() } catch (_: Exception) { }
                     kwClient = null
-                    val client = Kw1281Client(serial) { msg -> runOnUiThread { appendLog(msg) } }
+                    val client = Kw1281Client(
+                        serial,
+                        { msg -> runOnUiThread { appendLog(msg) } },
+                        diagnosticSettings.responseTimeoutMs,
+                        diagnosticSettings.initTimeoutMs
+                    )
                     val handshake = client.connect(address, baud)
                     kwClient = client
                     val identification = try { client.readIdentification() } catch (e: Exception) { "Идентификация не прочитана: ${e.message}" }
