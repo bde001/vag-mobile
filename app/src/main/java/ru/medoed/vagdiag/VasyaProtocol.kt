@@ -70,12 +70,9 @@ object VasyaProtocol {
                 port.setBreak(false)
                 Thread.sleep(30)
             }
-            val released = try { !port.breakPortStatus } catch (e: Exception) { false }
-            if (!released) {
-                dbgQuiet?.invoke("getBreak после отпускания не подтверждает idle — fast-init отключён")
-                return false
-            }
-            log("Init метод: fast-init 9600 (аппаратный break подтверждён драйвером) — как Вася со Start Baud 9600")
+            // Драйвер принял setBreak(true)+setBreak(false) без исключений оба цикла —
+            // считаем аппаратный break рабочим (у сломанных CH340 controlIn/getBreak падает).
+            log("Init метод: fast-init 9600 (аппаратный break принят драйвером) — как Вася со Start Baud 9600")
             true
         } catch (e: Exception) {
             try { port.setBreak(false) } catch (_: Exception) { }

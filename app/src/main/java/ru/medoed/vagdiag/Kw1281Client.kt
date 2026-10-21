@@ -76,7 +76,7 @@ class Kw1281Client(
         val useFast = fastInit || startBaudRate >= 4800
         // Каскад методов инициализации (подбор «как в Васе»): fast break -> реальные 5 бод -> serial-break.
         setLineParamsQuietly(if (useFast) VasyaProtocol.FAST_INIT_BAUD else baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-        val method = VasyaProtocol.chooseMethod(port, if (useFast) 9600 else startBaudRate, ::log, ::dbg)
+        val method = VasyaProtocol.chooseMethod(port, if (useFast) 9600 else startBaudRate, { log(it) }, { dbg(it) })
         val effectiveBaud = if (method == VasyaProtocol.InitMethod.FAST_INIT_9600) VasyaProtocol.FAST_INIT_BAUD else baudRate
         if (effectiveBaud != baudRate) log("Пост-init скорость переключена на $effectiveBaud бод (метод инициализации: ${method.name})")
         dbgVerbose("Инициализация: метод=${method.name}, пост-init $effectiveBaud бод, echo=${echoDelayMs}мс, BLK=${blockDelayMs}мс, Int=${interByteDelayMs}мс, DelayCharInt=${charInterDelayMs}мс")

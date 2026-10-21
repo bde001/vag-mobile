@@ -21,7 +21,6 @@ import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.appcompat.widget.PopupMenu
 import android.widget.Toast
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
