@@ -203,7 +203,7 @@ class MainActivity : Activity() {
         val row1 = tileRow()
         row1.addView(tile("▦", "Список блоков", "Опрос KW1281") { scanControllers() }, tileParams())
         row1.addView(tile("⚠", "Ошибки DTC", "Двигатель · адрес 01") {
-            runDiagnostic("Подключение и чтение DTC") { client -> client.connectAuto(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate); client.readFaults() }
+            runDiagnostic("Подключение и чтение DTC") { client -> client.connectAuto(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate, diagnosticSettings.startBaudRate); client.readFaults() }
         }, tileParams())
         content.addView(row1, matchWrap())
         val row2 = tileRow()
@@ -234,7 +234,7 @@ class MainActivity : Activity() {
         panel.addView(button("⚙ Настройки подключения", false) { showDiagnosticSettings() }, matchWrap())
         scanButton = button("Подключиться к ЭБУ · адрес %02X".format(diagnosticSettings.ecuAddress), true) {
             runDiagnostic("Автоопределение ЭБУ") { client ->
-                val connection = client.connectAuto(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate)
+                val connection = client.connectAuto(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate, diagnosticSettings.startBaudRate)
                 val identification = try { client.readIdentification() } catch (e: Exception) { "Идентификация не прочитана: ${e.message}" }
                 "$connection\nИдентификация ЭБУ:\n$identification"
             }
@@ -319,9 +319,24 @@ class MainActivity : Activity() {
             }.also { fields.addView(it, LinearLayout.LayoutParams(-1, -2)) }
         }
         val address = field("Адрес ЭБУ (двигатель обычно 01)", current.ecuAddress)
+        // Vasya Diagnost-style advanced options
+        val startBaud = field("Start Baud — скорость slow-init (по умолчанию 5)", current.startBaudRate)
         val baud = field("Скорость после инициализации, бод", current.baudRate)
         val response = field("Тайм-аут ответа, мс", current.responseTimeoutMs)
         val init = field("Тайм-аут инициализации, мс", current.initTimeoutMs)
+        val echoDelay = field("Echo delay — пауза перед чтением эха/ACK, мс (0..100)", current.echoDelayMs)
+        val blkDelay = field("BLK — задержка после целого блока, мс (0..1000)", current.blockDelayMs)
+        val intDelay = field("Int — межбайтовая задержка в блоке, мс (0..100)", current.interByteDelayMs)
+        val charIntDelay = field("Delay Char int — доп. пауза между символами, мс (0..100)", current.charInterDelayMs)
+        val debug = field("Debug level: 0 выкл, 1 байты TX/RX, 2 максимально подробно", current.debugLevel)
+        val kw2 = field("KW2 — маска keyword2, HEX (например FF или 7F)", current.kw2Mask,
+            android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS)
+        fields.addView(TextView(this).apply {
+            text = "Дополнительные параметры (Echo delay, BLK, Int, Delay Char int, Debug level, KW2) повторяют настройки Васи Диагноста. Меняй только при диагностике проблем с таймингами KKL-кабеля."
+            textSize = 11f
+            setTextColor(0xFF647C91.toInt())
+            setPadding(0, dp(10), 0, dp(4))
+        })
         val scroll = ScrollView(this).apply { addView(fields) }
         android.app.AlertDialog.Builder(this)
             .setTitle("Настройки подключения")
@@ -331,7 +346,7 @@ class MainActivity : Activity() {
                 diagnosticSettings.save(this)
                 kwClient = null
                 scanButton.text = "Подключиться к ЭБУ · адрес %02X".format(diagnosticSettings.ecuAddress)
-                appendLog("Настройки сброшены: адрес 01, автоопределение скорости (приоритет 10400 бод), тайм-аут ответа 1000 мс, инициализации 5000 мс")
+                appendLog("Настройки сброшены по умолчанию: ${diagnosticSettings.describe()}")
                 Toast.makeText(this, "Настройки по умолчанию восстановлены", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Отмена", null)
@@ -340,28 +355,47 @@ class MainActivity : Activity() {
                 dialog.setOnShowListener {
                     dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                         val a = address.text.toString().toIntOrNull()
+                        val sb = startBaud.text.toString().toIntOrNull()
                         val b = baud.text.toString().toIntOrNull()
                         val r = response.text.toString().toIntOrNull()
                         val i = init.text.toString().toIntOrNull()
+                        val echo = echoDelay.text.toString().toIntOrNull()
+                        val blk = blkDelay.text.toString().toIntOrNull()
+                        val inter = intDelay.text.toString().toIntOrNull()
+                        val charInt = charIntDelay.text.toString().toIntOrNull()
+                        val dbgLvl = debug.text.toString().toIntOrNull()
+                        val kw2v = kw2.text.toString().trim().removePrefix("0x").removePrefix("0X").toIntOrNull(16)
                         val error = when {
                             a == null || a !in 0..127 -> "Адрес должен быть от 0 до 127"
+                            sb == null || sb !in 1..115200 -> "Start Baud: от 1 до 115200 (обычно 5)"
                             b == null || b !in listOf(4800, 9600, 10400) -> "Скорость: 4800, 9600 или 10400"
                             r == null || r !in 100..10000 -> "Тайм-аут ответа: 100–10000 мс"
                             i == null || i !in 1000..15000 -> "Тайм-аут инициализации: 1000–15000 мс"
+                            echo == null || echo !in 0..100 -> "Echo delay: 0–100 мс"
+                            blk == null || blk !in 0..1000 -> "BLK: 0–1000 мс"
+                            inter == null || inter !in 0..100 -> "Int: 0–100 мс"
+                            charInt == null || charInt !in 0..100 -> "Delay Char int: 0–100 мс"
+                            dbgLvl == null || dbgLvl !in 0..2 -> "Debug level: 0, 1 или 2"
+                            kw2v == null || kw2v !in 0..0xFF -> "KW2: HEX-значение 00–FF"
                             else -> null
                         }
                         if (error != null) {
                             Toast.makeText(this, error, Toast.LENGTH_LONG).show()
                             return@setOnClickListener
                         }
-                        diagnosticSettings = DiagnosticSettings(a!!, b!!, r!!, i!!)
+                        diagnosticSettings = DiagnosticSettings(
+                            ecuAddress = a!!, baudRate = b!!, responseTimeoutMs = r!!, initTimeoutMs = i!!,
+                            startBaudRate = sb!!, echoDelayMs = echo!!, blockDelayMs = blk!!,
+                            interByteDelayMs = inter!!, charInterDelayMs = charInt!!,
+                            debugLevel = dbgLvl!!, kw2Mask = kw2v!!
+                        )
                         diagnosticSettings.save(this)
                         kwClient = null
                         scanButton.text = "Подключиться к ЭБУ · адрес %02X".format(diagnosticSettings.ecuAddress)
-                        appendLog("Настройки сохранены: адрес %02X, %d бод, ответ %d мс, инициализация %d мс".format(
-                            diagnosticSettings.ecuAddress, diagnosticSettings.baudRate,
-                            diagnosticSettings.responseTimeoutMs, diagnosticSettings.initTimeoutMs
-                        ))
+                        appendLog("Настройки сохранены: ${diagnosticSettings.describe()}")
+                        if (diagnosticSettings.kw2Mask != 0xFF) {
+                            appendLog("Внимание: KW2 маска изменена с %02X. Это может исказить расчёт версии протокола KWP.".format(0xFF))
+                        }
                         dialog.dismiss()
                     }
                 }
@@ -522,8 +556,14 @@ class MainActivity : Activity() {
                 val client = kwClient ?: Kw1281Client(
                     serial,
                     { message -> runOnUiThread { appendLog(message) } },
-                    diagnosticSettings.responseTimeoutMs,
-                    diagnosticSettings.initTimeoutMs
+                    responseTimeoutMs = diagnosticSettings.responseTimeoutMs,
+                    initTimeoutMs = diagnosticSettings.initTimeoutMs,
+                    echoDelayMs = diagnosticSettings.echoDelayMs,
+                    blockDelayMs = diagnosticSettings.blockDelayMs,
+                    interByteDelayMs = diagnosticSettings.interByteDelayMs,
+                    charInterDelayMs = diagnosticSettings.charInterDelayMs,
+                    debugLevel = diagnosticSettings.debugLevel,
+                    kw2Mask = diagnosticSettings.kw2Mask
                 ).also { kwClient = it }
                 val result = action(client)
                 runOnUiThread {
@@ -578,10 +618,16 @@ class MainActivity : Activity() {
                     val client = Kw1281Client(
                         serial,
                         { msg -> runOnUiThread { appendLog(msg) } },
-                        diagnosticSettings.responseTimeoutMs,
-                        diagnosticSettings.initTimeoutMs
+                        responseTimeoutMs = diagnosticSettings.responseTimeoutMs,
+                        initTimeoutMs = diagnosticSettings.initTimeoutMs,
+                        echoDelayMs = diagnosticSettings.echoDelayMs,
+                        blockDelayMs = diagnosticSettings.blockDelayMs,
+                        interByteDelayMs = diagnosticSettings.interByteDelayMs,
+                        charInterDelayMs = diagnosticSettings.charInterDelayMs,
+                        debugLevel = diagnosticSettings.debugLevel,
+                        kw2Mask = diagnosticSettings.kw2Mask
                     )
-                    val handshake = client.connect(address, baud)
+                    val handshake = client.connect(address, baud, startBaudRate = diagnosticSettings.startBaudRate)
                     kwClient = client
                     val identification = try { client.readIdentification() } catch (e: Exception) { "Идентификация не прочитана: ${e.message}" }
                     found += "%02X — %s (%d бод)\n%s\n%s".format(address, label, baud, identification, handshake)
