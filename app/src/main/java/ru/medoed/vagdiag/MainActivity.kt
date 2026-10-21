@@ -203,7 +203,7 @@ class MainActivity : Activity() {
         val row1 = tileRow()
         row1.addView(tile("▦", "Список блоков", "Опрос KW1281") { scanControllers() }, tileParams())
         row1.addView(tile("⚠", "Ошибки DTC", "Двигатель · адрес 01") {
-            runDiagnostic("Подключение и чтение DTC") { client -> client.connect(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate); client.readFaults() }
+            runDiagnostic("Подключение и чтение DTC") { client -> client.connectAuto(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate); client.readFaults() }
         }, tileParams())
         content.addView(row1, matchWrap())
         val row2 = tileRow()
@@ -233,7 +233,11 @@ class MainActivity : Activity() {
         })
         panel.addView(button("⚙ Настройки подключения", false) { showDiagnosticSettings() }, matchWrap())
         scanButton = button("Подключиться к ЭБУ · адрес %02X".format(diagnosticSettings.ecuAddress), true) {
-            runDiagnostic("Подключение ЭБУ") { client -> client.connect(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate) }
+            runDiagnostic("Автоопределение ЭБУ") { client ->
+                val connection = client.connectAuto(diagnosticSettings.ecuAddress, diagnosticSettings.baudRate)
+                val identification = try { client.readIdentification() } catch (e: Exception) { "Идентификация не прочитана: ${e.message}" }
+                "$connection\nИдентификация ЭБУ:\n$identification"
+            }
         }
         panel.addView(scanButton, matchWrap())
         panel.addView(button("Прочитать идентификацию ЭБУ", false) {
@@ -327,7 +331,7 @@ class MainActivity : Activity() {
                 diagnosticSettings.save(this)
                 kwClient = null
                 scanButton.text = "Подключиться к ЭБУ · адрес %02X".format(diagnosticSettings.ecuAddress)
-                appendLog("Настройки сброшены: адрес 01, 9600 бод, тайм-аут ответа 1000 мс, инициализации 5000 мс")
+                appendLog("Настройки сброшены: адрес 01, автоопределение скорости (приоритет 10400 бод), тайм-аут ответа 1000 мс, инициализации 5000 мс")
                 Toast.makeText(this, "Настройки по умолчанию восстановлены", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Отмена", null)

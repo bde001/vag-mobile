@@ -4,7 +4,7 @@ import android.content.Context
 
 data class DiagnosticSettings(
     val ecuAddress: Int = 1,
-    val baudRate: Int = 9600,
+    val baudRate: Int = 10400,
     val responseTimeoutMs: Int = 1000,
     val initTimeoutMs: Int = 5000
 ) {
@@ -23,7 +23,7 @@ data class DiagnosticSettings(
             val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             return DiagnosticSettings(
                 ecuAddress = p.getInt("ecu_address", 1),
-                baudRate = p.getInt("baud_rate", 9600),
+                baudRate = p.getInt("baud_rate", 10400),
                 responseTimeoutMs = p.getInt("response_timeout_ms", 1000),
                 initTimeoutMs = p.getInt("init_timeout_ms", 5000)
             )

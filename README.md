@@ -53,3 +53,8 @@ KW1281 is a VAG K-Line protocol with a 5-baud address wake-up, `0x55` sync plus 
 - https://github.com/muki01/VAG_KW1281 (GPL-3.0 firmware/reference implementation)
 
 This project is an independent experimental implementation, not a port of either project. Review their licences before copying code or tables.
+
+
+## Автоопределение скорости подключения
+
+Кнопки подключения двигателя сначала пробуют выбранную в настройках скорость, затем остальные распространённые скорости 10400, 9600 и 4800 бод. Успешным определением считается только установленный KW1281-сеанс; отсутствие ответа не означает, что ЭБУ неисправен или отсутствует. Эта версия пока не реализует все протоколы VAG (в частности, полноценный KWP2000) и не является заменой VCDS/Васи.

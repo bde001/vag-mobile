@@ -17,8 +17,36 @@ class Kw1281Client(
     private var counter: Int = 0
     private var connected = false
 
+    /**
+     * Automatic connection attempt: keep the selected ECU address, but try the common
+     * post-init UART rates without requiring the user to guess one. A successful KW1281
+     * handshake is the only condition that counts as detection; a timeout is not proof
+     * that the ECU is absent or faulty.
+     */
     @Synchronized
-    fun connect(address: Int = 0x01, baudRate: Int = 9600): String {
+    fun connectAuto(address: Int = 0x01, preferredBaudRate: Int = 10400): String {
+        val rates = listOf(preferredBaudRate, 10400, 9600, 4800).distinct()
+            .filter { it in setOf(4800, 9600, 10400) }
+        val errors = mutableListOf<String>()
+        for (rate in rates) {
+            connected = false
+            log("Автоопределение ЭБУ: адрес %02X, проверка %d бод".format(address, rate))
+            try {
+                val result = connect(address, rate)
+                log("Автоопределение: ответ получен на %d бод".format(rate))
+                return "Автоматически определён ответ ЭБУ на адресе %02X, скорость %d бод\n%s".format(address, rate, result)
+            } catch (e: Exception) {
+                val reason = e.message ?: e.javaClass.simpleName
+                errors += "$rate бод: $reason"
+                log("Автоопределение: %d бод — нет соединения (%s)".format(rate, reason))
+            }
+        }
+        throw IOException("Не удалось установить KW1281-соединение с адресом %02X. Проверены скорости: %s\n".format(address, rates.joinToString()) + errors.joinToString("\n"))
+    }
+
+    @Synchronized
+    fun connect(address: Int = 0x01, baudRate: Int = 10400): String {
+        connected = false
         if (address !in 0..0x7F) throw IllegalArgumentException("KW1281 address must be 0..127")
         if (baudRate !in setOf(4800, 9600, 10400)) throw IllegalArgumentException("Supported post-init baud rates: 4800, 9600, 10400")
         port.setParameters(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
