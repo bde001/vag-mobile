@@ -3,6 +3,7 @@
     <application
         android:allowBackup="false"
         android:label="VAG Diag Android"
+        android:icon="@drawable/vag_diag_logo"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false">
         <activity android:name=".MainActivity" android:exported="true">

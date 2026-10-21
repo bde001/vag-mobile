@@ -16,6 +16,8 @@ import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ImageView
+import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -39,7 +41,11 @@ class MainActivity : Activity() {
     private lateinit var connectButton: Button
     private lateinit var readButton: Button
     private lateinit var scanButton: Button
-    private lateinit var controllerScanButton: Button
+    private var controllerScanButton: Button? = null
+    private lateinit var mainScroll: ScrollView
+    private lateinit var quickAccessAnchor: View
+    private lateinit var diagnosticAnchor: View
+    private lateinit var logAnchor: View
     private lateinit var dtcButton: Button
     private lateinit var groupsButton: Button
     private lateinit var adaptButton: Button
@@ -93,6 +99,7 @@ class MainActivity : Activity() {
             setBackgroundColor(pale)
         }
         val scroll = ScrollView(this)
+        mainScroll = scroll
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(22))
@@ -105,13 +112,11 @@ class MainActivity : Activity() {
             background = rounded(navy, 0, 0, 0, 0)
         }
         val brandRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val logo = TextView(this).apply {
-            text = "V"
-            textSize = 28f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            setTextColor(0xFFFFFFFF.toInt())
-            background = rounded(0xFF174E7D.toInt(), 100, 100, 100, 100)
-            layoutParams = LinearLayout.LayoutParams(dp(48), dp(48)).apply { rightMargin = dp(12) }
+        val logo = ImageView(this).apply {
+            setImageResource(R.drawable.vag_diag_logo)
+            contentDescription = "Логотип VAG Diag Android"
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            layoutParams = LinearLayout.LayoutParams(dp(52), dp(52)).apply { rightMargin = dp(12) }
         }
         brandRow.addView(logo)
         val brandText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -123,6 +128,18 @@ class MainActivity : Activity() {
             text = "GOLF IV · 1.6 16V BCB"; textSize = 12f; setTextColor(0xFFB9D2E7.toInt())
         })
         brandRow.addView(brandText, LinearLayout.LayoutParams(0, -2, 1f))
+        val menuButton = TextView(this).apply {
+            text = "☰"
+            textSize = 27f
+            gravity = Gravity.CENTER
+            setTextColor(0xFFFFFFFF.toInt())
+            contentDescription = "Открыть меню"
+            isClickable = true
+            isFocusable = true
+            setPadding(dp(8), dp(4), dp(8), dp(4))
+            setOnClickListener { showNavigationMenu(this) }
+        }
+        brandRow.addView(menuButton, LinearLayout.LayoutParams(dp(44), dp(48)))
         header.addView(brandRow)
         status = TextView(this).apply {
             text = "● Адаптер не подключён"; textSize = 13f; typeface = android.graphics.Typeface.DEFAULT_BOLD
@@ -137,6 +154,34 @@ class MainActivity : Activity() {
         header.addView(deviceInfo)
         root.addView(header)
 
+        val carBanner = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = rounded(0xFFFFFFFF.toInt(), 16, 16, 16, 16)
+        }
+        val carPicture = ImageView(this).apply {
+            setImageResource(R.drawable.golf_car_illustration)
+            contentDescription = "Иллюстрация автомобиля Volkswagen Golf IV"
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            layoutParams = LinearLayout.LayoutParams(dp(126), dp(76)).apply { rightMargin = dp(12) }
+        }
+        carBanner.addView(carPicture)
+        val carCopy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        carCopy.addView(TextView(this).apply {
+            text = "ТВОЙ АВТОМОБИЛЬ"; textSize = 10f; typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(0xFF0874C9.toInt())
+        })
+        carCopy.addView(TextView(this).apply {
+            text = "Volkswagen Golf IV"; textSize = 17f; typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(ink)
+        })
+        carCopy.addView(TextView(this).apply {
+            text = "1.6 16V · BCB · K-line"; textSize = 12f; setTextColor(muted)
+        })
+        carBanner.addView(carCopy, LinearLayout.LayoutParams(0, -2, 1f))
+        content.addView(carBanner, matchWrap())
+
         content.addView(TextView(this).apply {
             text = "Volkswagen Golf IV"; textSize = 20f; typeface = android.graphics.Typeface.DEFAULT_BOLD
             setTextColor(ink); setPadding(dp(2), dp(16), dp(2), 0)
@@ -150,7 +195,8 @@ class MainActivity : Activity() {
         content.addView(connectButton, matchWrap())
         content.addView(button("Отключить адаптер", false) { disconnectAdapter() }, matchWrap())
 
-        content.addView(section("БЫСТРЫЙ ДОСТУП"))
+        quickAccessAnchor = section("БЫСТРЫЙ ДОСТУП")
+        content.addView(quickAccessAnchor)
         // Two-column VAG-style tiles. Each tile opens a real implemented action or clearly reports that it is unavailable.
         val row1 = tileRow()
         row1.addView(tile("▦", "Список блоков", "Опрос KW1281") { scanControllers() }, tileParams())
@@ -216,6 +262,7 @@ class MainActivity : Activity() {
             else runDiagnostic("Группа $group") { client -> client.readGroup(group) }
         }
         panel.addView(groupsButton, matchWrap())
+        diagnosticAnchor = panel
         content.addView(panel, matchWrap())
 
         val warning = TextView(this).apply {
@@ -224,7 +271,8 @@ class MainActivity : Activity() {
             background = rounded(0xFFFFF0D2.toInt(), 12, 12, 12, 12)
         }
         content.addView(warning, matchWrap())
-        content.addView(section("ЖУРНАЛ ДИАГНОСТИКИ"))
+        logAnchor = section("ЖУРНАЛ ДИАГНОСТИКИ")
+        content.addView(logAnchor)
         logView = TextView(this).apply {
             textSize = 12f; typeface = android.graphics.Typeface.MONOSPACE
             setTextColor(0xFFDDE7EF.toInt()); setPadding(dp(12), dp(12), dp(12), dp(12))
@@ -240,6 +288,35 @@ class MainActivity : Activity() {
         scroll.addView(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+    }
+
+    private fun showNavigationMenu(anchor: View) {
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, 1, 0, "Главная")
+        popup.menu.add(0, 2, 1, "Быстрый доступ")
+        popup.menu.add(0, 3, 2, "Диагностика двигателя")
+        popup.menu.add(0, 4, 3, "Журнал диагностики")
+        popup.menu.add(0, 5, 4, "О приложении")
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> mainScroll.smoothScrollTo(0, 0)
+                2 -> mainScroll.post { mainScroll.smoothScrollTo(0, quickAccessAnchor.top) }
+                3 -> mainScroll.post { mainScroll.smoothScrollTo(0, diagnosticAnchor.top) }
+                4 -> mainScroll.post { mainScroll.smoothScrollTo(0, logAnchor.top) }
+                5 -> android.app.AlertDialog.Builder(this)
+                    .setTitle("VAG Diag Android")
+                    .setMessage("""Бесплатное экспериментальное приложение для диагностики автомобилей VAG через USB KKL.
+
+Автомобиль: Volkswagen Golf IV 1.6 16V BCB.
+Адаптер: USB KKL / CH340.
+
+Поддержка протокола и связь с ЭБУ требуют проверки на реальном автомобиле. Адаптации и базовые установки пока не реализованы.""")
+                    .setPositiveButton("Понятно", null)
+                    .show()
+            }
+            true
+        }
+        popup.show()
     }
 
     private fun section(text: String) = TextView(this).apply {
@@ -392,7 +469,7 @@ class MainActivity : Activity() {
             Triple(0x35, "Центральный замок", 9600), Triple(0x46, "Комфорт", 9600),
             Triple(0x56, "Магнитола", 9600)
         )
-        controllerScanButton.isEnabled = false
+        controllerScanButton?.isEnabled = false
         appendLog("Начинаю последовательный опрос ${targets.size} адресов KW1281. Это может занять несколько минут.")
         io.execute {
             val found = mutableListOf<String>()
@@ -418,7 +495,7 @@ class MainActivity : Activity() {
                 appendLog("Результат опроса KW1281: успешно установлено соединений ${found.size} из ${targets.size}.")
                 if (found.isNotEmpty()) appendLog("ОТВЕТИЛИ:\n" + found.joinToString("\n\n"))
                 appendLog("НЕ ОТВЕТИЛИ ПО KW1281 (это не доказывает отсутствие блока):\n" + missed.joinToString("\n"))
-                controllerScanButton.isEnabled = true
+                controllerScanButton?.isEnabled = true
             }
         }
     }
