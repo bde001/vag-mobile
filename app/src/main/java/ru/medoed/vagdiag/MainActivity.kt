@@ -2,6 +2,7 @@ package ru.medoed.vagdiag
 
 import android.app.Activity
 import android.app.PendingIntent
+import android.app.ProgressDialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -52,6 +53,8 @@ class MainActivity : Activity() {
     private lateinit var shareLogButton: Button
     private lateinit var groupInput: EditText
     private var kwClient: Kw1281Client? = null
+    private var busyCount = 0
+    private var progressDialog: ProgressDialog? = null
     private lateinit var diagnosticSettings: DiagnosticSettings
     private var port: UsbSerialPort? = null
     private var connectedDevice: UsbDevice? = null
@@ -84,7 +87,7 @@ class MainActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(permissionReceiver, filter)
         }
-        appendLog("VAG Diag Android 0.1.0-alpha started")
+        appendLog("VAG Diag Android 0.6.0-alpha started")
         appendLog("Target: Golf IV 1.6 16V BCB / USB KKL CH340")
         appendLog("No ECU data is fabricated. Diagnostic protocol support is not yet validated.")
         refreshDevices()
@@ -506,13 +509,16 @@ class MainActivity : Activity() {
     }
 
     private fun openDevice(device: UsbDevice) {
+        showBusy("USB KKL", "Открываю порт адаптера…")
         io.execute {
             try {
                 closePort()
                 val driver = UsbSerialProber.getDefaultProber().probeDevice(device)
                     ?: throw IOException("Нет драйвера USB-Serial для этого устройства")
+                runOnUiThread { updateBusy("Запрашиваю USB-соединение…") }
                 val connection = usbManager.openDevice(device) ?: throw IOException("Не удалось открыть USB-устройство")
                 val serial = driver.ports.firstOrNull() ?: throw IOException("У адаптера нет serial-порта")
+                runOnUiThread { updateBusy("Инициализация UART…") }
                 serial.open(connection)
                 // 10400 baud is common for KWP fast-init. This is only a UART setting, not ECU initialization.
                 serial.setParameters(10400, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
@@ -520,13 +526,14 @@ class MainActivity : Activity() {
                 kwClient = null
                 connectedDevice = device
                 runOnUiThread {
+                    hideBusy()
                     status.text = "● USB-адаптер подключён"; status.setTextColor(0xFF237A45.toInt())
                     deviceInfo.text = "USB открыт: VID %04X · PID %04X\nUART: 10400 8N1 (настройка порта, не подтверждение связи с ЭБУ)".format(Locale.US, device.vendorId, device.productId)
                     appendLog("USB serial port opened; UART configured 10400 8N1")
                     appendLog("Адаптер готов. Связь с ЭБУ ещё не установлена — нажми «Подключить ЭБУ двигателя».")
                 }
             } catch (e: Exception) {
-                runOnUiThread { appendLog("Open failed: ${e.message}"); status.text = "● Не удалось открыть адаптер"; status.setTextColor(0xFF9B2C2C.toInt()) }
+                runOnUiThread { hideBusy(); appendLog("Open failed: ${e.message}"); status.text = "● Не удалось открыть адаптер"; status.setTextColor(0xFF9B2C2C.toInt()) }
             }
         }
     }
@@ -544,9 +551,47 @@ class MainActivity : Activity() {
         }
     }
 
+    /**
+     * Busy/progress overlay: a spinner dialog with the current protocol stage, so long
+     * slow-init/handshake waits visibly look like work in progress instead of a freeze.
+     * Must be called on the UI thread (runOnUiThread / onCreate paths already do).
+     */
+    private fun showBusy(title: String, message: String) {
+        busyCount++
+        if (progressDialog == null) {
+            progressDialog = ProgressDialog(this).apply {
+                isIndeterminate = true
+                setProgressStyle(ProgressDialog.STYLE_SPINNER)
+                setCancelable(false)
+            }
+        }
+        progressDialog?.apply {
+            setTitle(title)
+            setMessage(message)
+            if (!isShowing) show()
+        }
+    }
+
+    /** Updates the dialog text from the IO thread; silently ignores updates when hidden. */
+    private fun updateBusy(message: String) {
+        runOnUiThread {
+            if (busyCount > 0) progressDialog?.setMessage(message)
+        }
+    }
+
+    private fun hideBusy() {
+        busyCount--
+        if (busyCount <= 0) {
+            busyCount = 0
+            try { progressDialog?.dismiss() } catch (_: Exception) { }
+            progressDialog = null
+        }
+    }
+
     private fun runDiagnostic(label: String, action: (Kw1281Client) -> String) {
         val serial = port
         if (serial == null) { appendLog("Сначала подключи USB KKL") ; return }
+        showBusy(label, "Открываю соединение с ЭБУ…")
         io.execute {
             try {
                 val client = kwClient ?: Kw1281Client(
@@ -559,10 +604,12 @@ class MainActivity : Activity() {
                     interByteDelayMs = diagnosticSettings.interByteDelayMs,
                     charInterDelayMs = diagnosticSettings.charInterDelayMs,
                     debugLevel = diagnosticSettings.debugLevel,
-                    initRetryTimes = diagnosticSettings.initRetryTimes
+                    initRetryTimes = diagnosticSettings.initRetryTimes,
+                    onStage = { stage -> updateBusy(stage) }
                 ).also { kwClient = it }
                 val result = action(client)
                 runOnUiThread {
+                    hideBusy()
                     appendLog("$label — результат:\n$result")
                     Toast.makeText(this, "$label: операция завершена", Toast.LENGTH_SHORT).show()
                 }
@@ -580,6 +627,7 @@ class MainActivity : Activity() {
                 // cannot identify which USB-serial API/driver operation failed.
                 val trace = android.util.Log.getStackTraceString(e)
                 runOnUiThread {
+                    hideBusy()
                     appendLog("$label — ошибка: $detail")
                     appendLog(trace)
                     Toast.makeText(this, "Ошибка диагностики: $detail", Toast.LENGTH_LONG).show()
@@ -603,11 +651,13 @@ class MainActivity : Activity() {
             Triple(0x56, "Магнитола", 0)
         )
         controllerScanButton?.isEnabled = false
-        appendLog("Начинаю последовательный опрос ${targets.size} адресов KW1281 (скорость подбирается по адресу, как в Васе). Это может занять несколько минут.")
+        showBusy("Список блоков", "Опрашиваю адрес 01 (1 из ${targets.size})…")
         io.execute {
             val found = mutableListOf<String>()
             val missed = mutableListOf<String>()
-            for ((address, label, baud) in targets) {
+            for ((index, target) in targets.withIndex()) {
+                val (address, label, baud) = target
+                runOnUiThread { updateBusy("Опрашиваю «$label» · адрес %02X (${index + 1} из ${targets.size})…".format(address)) }
                 try {
                     try { kwClient?.disconnect() } catch (_: Exception) { }
                     kwClient = null
@@ -621,7 +671,8 @@ class MainActivity : Activity() {
                         interByteDelayMs = diagnosticSettings.interByteDelayMs,
                         charInterDelayMs = diagnosticSettings.charInterDelayMs,
                         debugLevel = diagnosticSettings.debugLevel,
-                        initRetryTimes = diagnosticSettings.initRetryTimes
+                        initRetryTimes = diagnosticSettings.initRetryTimes,
+                        onStage = { stage -> updateBusy("«$label» (${index + 1}/${targets.size}): $stage") }
                     )
                     val handshake = client.connectAuto(address, baud, diagnosticSettings.startBaudRate)
                     kwClient = client
@@ -636,6 +687,8 @@ class MainActivity : Activity() {
                 }
             }
             runOnUiThread {
+                hideBusy()
+                appendLog("Начинаю последовательный опрос ${targets.size} адресов KW1281 (скорость подбирается по адресу, как в Васе). Это может занять несколько минут.")
                 appendLog("Результат опроса KW1281: успешно установлено соединений ${found.size} из ${targets.size}.")
                 if (found.isNotEmpty()) appendLog("ОТВЕТИЛИ:\n" + found.joinToString("\n\n"))
                 appendLog("НЕ ОТВЕТИЛИ ПО KW1281 (это не доказывает отсутствие блока):\n" + missed.joinToString("\n"))
@@ -645,9 +698,11 @@ class MainActivity : Activity() {
     }
 
     private fun disconnectAdapter() {
+        showBusy("USB KKL", "Закрываю порт адаптера…")
         io.execute {
             closePort()
             runOnUiThread {
+                hideBusy()
                 status.text = "● Адаптер отключён"
                 status.setTextColor(0xFF9B2C2C.toInt())
                 deviceInfo.text = "USB-порт закрыт"

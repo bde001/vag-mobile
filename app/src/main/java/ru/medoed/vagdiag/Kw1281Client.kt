@@ -18,7 +18,9 @@ class Kw1281Client(
     private val interByteDelayMs: Int = 5,
     private val charInterDelayMs: Int = 0,
     private val debugLevel: Int = 0,
-    private val initRetryTimes: Int = 2
+    private val initRetryTimes: Int = 2,
+    /** Optional stage callback for the on-screen progress dialog (called from the IO thread). */
+    private val onStage: ((String) -> Unit)? = null
 ) {
     data class Block(val counter: Int, val title: Int, val data: ByteArray) {
         fun hex(): String = (byteArrayOf(counter.toByte(), title.toByte()) + data).joinToString(" ") { "%02X".format(it) }
@@ -31,6 +33,8 @@ class Kw1281Client(
     private fun dbg(message: String) { if (debugLevel >= 1) log(message) }
     private fun dbgVerbose(message: String) { if (debugLevel >= 2) log(message) }
     private fun pause(ms: Int) { if (ms > 0) Thread.sleep(ms.toLong()) }
+    /** Reports the current protocol stage to the progress dialog (if wired up). */
+    private fun stage(message: String) { onStage?.invoke(message) }
 
     /**
      * Automatic connection attempt, Vasya Diagnost style: the ECU address is kept, but the
@@ -48,6 +52,7 @@ class Kw1281Client(
         for (rate in rates) {
             connected = false
             log("Автоопределение ЭБУ: адрес %02X, проверка %d бод".format(address, rate))
+            stage("Адрес %02X · инициализация на %d бод…".format(address, rate))
             try {
                 val result = connect(address, rate, startBaudRate = preferredStartBaud, initRetries = initRetries)
                 log("Автоопределение: ответ получен на %d бод".format(rate))
@@ -94,6 +99,7 @@ class Kw1281Client(
         // часть ЭБУ просыпается только со второго импульса.
         while (sync == null && attempt < retries) {
             attempt++
+            stage("Отправка slow-init (попытка $attempt/$retries)…")
             if (!firstAttempt) {
                 log("Нет ответа ЭБУ за ${initTimeoutMs} мс (попытка $attempt/$retries) — повторяю slow-init…")
                 // Пауза между попытками, как в kw1281test: даём ЭБУ отпустить линию.
@@ -114,6 +120,7 @@ class Kw1281Client(
             }
             pause(blockDelayMs)
             drainRx()
+            stage("Ожидание синхры 0x55 (до ${initTimeoutMs} мс)…")
             try {
                 sync = readByte(initTimeoutMs)
             } catch (e: IOException) {
@@ -128,6 +135,7 @@ class Kw1281Client(
             else ""
             throw IOException("ЭБУ прислал 0x%02X вместо синхры 0x55.$hint Проверь скорость пост-init в настройках и качество контакта K-Line.".format(syncByte))
         }
+        stage("Синхра получена — читаю keywords…")
         val key1 = readByte(responseTimeoutMs)
         val key2 = readByte(responseTimeoutMs)
         val protocolVersion = ((key2 and 0x7F) shl 7) or (key1 and 0x7F)
@@ -145,6 +153,7 @@ class Kw1281Client(
         pause(echoDelayMs)
         writeRaw(0xC1) // AckHandshake
         pause(blockDelayMs.coerceAtLeast(50))
+        stage("Handshake KW1281 — обмен ACK…")
         val initial = mutableListOf<Block>()
         var handshakeFinished = false
         repeat(12) {
@@ -152,6 +161,7 @@ class Kw1281Client(
             val block = receiveBlock()
             initial += block
             counter = (block.counter + 1) and 0xFF
+            stage("Получен блок %02X, подтверждаю…" .format(block.title))
             if (block.title == 0x09 || block.title == 0x0A) handshakeFinished = true
             else {
                 // Тот же ACK между блоками, что и в kw1281test/Vasya
@@ -230,12 +240,15 @@ class Kw1281Client(
     }
 
     private fun request(title: Int, vararg payload: Int): List<Block> {
+        stage("Отправка команды…")
         sendBlock(title, *payload)
         val result = mutableListOf<Block>()
         repeat(32) {
+            stage("Ожидание ответа ЭБУ…")
             val b = receiveBlock()
             result += b
             if (b.title == 0x09 || b.title == 0x0A) return result
+            stage("Получен блок %02X — запрашиваю следующий…" .format(b.title))
             sendBlock(0x09)
         }
         throw IOException("Too many blocks; ECU response did not terminate")
