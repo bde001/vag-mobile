@@ -18,19 +18,35 @@ class Kw1281Client(private val port: UsbSerialPort, private val log: (String) ->
         if (baudRate !in setOf(4800, 9600, 10400)) throw IllegalArgumentException("Supported post-init baud rates: 4800, 9600, 10400")
         port.purgeHwBuffers(true, true)
         port.setParameters(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-        // KW1281 slow init: 7 data bits, odd parity, 1 stop bit, 5 baud. CH340 adapters vary;
-        // bit-bang the UART TX break line for each 200 ms bit rather than asking CH340 for 5 baud.
-        val frame = mutableListOf(0) // start bit
-        for (i in 0..6) frame.add((address shr i) and 1)
-        val dataOnes = (0..6).count { ((address shr it) and 1) == 1 }
-        frame += if (dataOnes % 2 == 0) 1 else 0 // odd parity
-        frame += 1 // stop bit
-        for (bit in frame) {
-            port.setBreak(bit == 0)
-            Thread.sleep(200)
+        // KW1281 slow init: 7 data bits, odd parity, 1 stop bit, 5 baud.
+        // Some USB-serial drivers (including some CH340 builds) do not implement setBreak().
+        // In that case, fall back to a real 5-baud UART frame instead of crashing with
+        // UnsupportedOperationException. A 5-baud byte takes about two seconds, so use 5 s timeout.
+        try {
+            val frame = mutableListOf(0) // start bit
+            for (i in 0..6) frame.add((address shr i) and 1)
+            val dataOnes = (0..6).count { ((address shr it) and 1) == 1 }
+            frame += if (dataOnes % 2 == 0) 1 else 0 // odd parity
+            frame += 1 // stop bit
+            for (bit in frame) {
+                port.setBreak(bit == 0)
+                Thread.sleep(200)
+            }
+            port.setBreak(false)
+        } catch (_: UnsupportedOperationException) {
+            try {
+                port.setParameters(5, 7, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_ODD)
+                port.write(byteArrayOf((address and 0x7F).toByte()), 5000)
+            } catch (e: Exception) {
+                throw IOException(
+                    "CH340/USB-драйвер не поддерживает setBreak() и не смог передать slow-init на 5 бод. " +
+                        "Проверь лог ошибки; связь с ЭБУ ещё не установлена.", e
+                )
+            }
         }
-        port.setBreak(false)
         Thread.sleep(30)
+        // Return to the configured post-init speed before reading ECU sync.
+        port.setParameters(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
         val sync = readByte(1800)
         if (sync != 0x55) throw IOException("ECU did not return KW1281 sync 55 (received %02X)".format(sync))
         val key1 = readByte(1000)

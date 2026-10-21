@@ -447,9 +447,22 @@ class MainActivity : Activity() {
                     Toast.makeText(this, "$label: операция завершена", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
+                val cause = e.cause
+                val detail = buildString {
+                    append(e.javaClass.name)
+                    e.message?.let { append(": ").append(it) }
+                    if (cause != null) {
+                        append("; причина: ").append(cause.javaClass.name)
+                        cause.message?.let { append(": ").append(it) }
+                    }
+                }
+                // Keep the full stack trace in the in-app log: the exception type alone
+                // cannot identify which USB-serial API/driver operation failed.
+                val trace = android.util.Log.getStackTraceString(e)
                 runOnUiThread {
-                    appendLog("$label — ошибка: ${e.message ?: e.javaClass.simpleName}")
-                    Toast.makeText(this, "Ошибка диагностики: ${e.message}", Toast.LENGTH_LONG).show()
+                    appendLog("$label — ошибка: $detail")
+                    appendLog(trace)
+                    Toast.makeText(this, "Ошибка диагностики: $detail", Toast.LENGTH_LONG).show()
                 }
             }
         }
