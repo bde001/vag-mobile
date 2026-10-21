@@ -12,8 +12,8 @@ data class DiagnosticSettings(
     val baudRate: Int = 10400,
     val responseTimeoutMs: Int = 1000,
     val initTimeoutMs: Int = 5000,
-    /** Start Baud: UART rate used for slow-init and as first candidate in auto-detection. */
-    val startBaudRate: Int = 10400,
+    /** Start Baud: bit-rate knob of the KW1281 slow-init wake-up (Vasya default: 5). */
+    val startBaudRate: Int = 5,
     /** Echo delay: pause after sending a byte before reading its echo/ACK (ms). */
     val echoDelayMs: Int = 5,
     /** BLK: extra pause after a complete block has been sent/received (ms). */
@@ -25,7 +25,9 @@ data class DiagnosticSettings(
     /** Debug level: 0 = off, 1 = normal TX/RX byte log, 2 = verbose handshake timing. */
     val debugLevel: Int = 0,
     /** KW2: keyword-2 mask applied to the ECU sync pattern (Vasya's default is 0xFF). */
-    val kw2Mask: Int = 0xFF
+    val kw2Mask: Int = 0xFF,
+    /** Init retry times: how many slow-init attempts before giving up (Vasya-style knob). */
+    val initRetryTimes: Int = 2
 ) {
     fun save(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -40,14 +42,15 @@ data class DiagnosticSettings(
             .putInt("char_inter_delay_ms", charInterDelayMs)
             .putInt("debug_level", debugLevel)
             .putInt("kw2_mask", kw2Mask)
+            .putInt("init_retry_times", initRetryTimes)
             .apply()
     }
 
     /** Concise one-line summary for the diagnostic log when settings are saved. */
     fun describe(): String =
-        "адрес %02X, старт %d бод, пост-init %d бод, echo %d мс, BLK %d мс, Int %d мс, DelayCharInt %d мс, Debug %d, KW2 %02X".format(
+        "адрес %02X, старт %d бод, пост-init %d бод, echo %d мс, BLK %d мс, Int %d мс, DelayCharInt %d мс, Debug %d, KW2 %02X, повторов инициализации %d".format(
             ecuAddress, startBaudRate, baudRate, echoDelayMs, blockDelayMs,
-            interByteDelayMs, charInterDelayMs, debugLevel, kw2Mask
+            interByteDelayMs, charInterDelayMs, debugLevel, kw2Mask, initRetryTimes
         )
 
     companion object {
@@ -59,13 +62,14 @@ data class DiagnosticSettings(
                 baudRate = p.getInt("baud_rate", 10400),
                 responseTimeoutMs = p.getInt("response_timeout_ms", 1000),
                 initTimeoutMs = p.getInt("init_timeout_ms", 5000),
-                startBaudRate = p.getInt("start_baud_rate", 10400),
+                startBaudRate = p.getInt("start_baud_rate", 5),
                 echoDelayMs = p.getInt("echo_delay_ms", 5),
                 blockDelayMs = p.getInt("block_delay_ms", 30),
                 interByteDelayMs = p.getInt("inter_byte_delay_ms", 5),
                 charInterDelayMs = p.getInt("char_inter_delay_ms", 0),
                 debugLevel = p.getInt("debug_level", 0),
-                kw2Mask = p.getInt("kw2_mask", 0xFF)
+                kw2Mask = p.getInt("kw2_mask", 0xFF),
+                initRetryTimes = p.getInt("init_retry_times", 2)
             )
         }
     }
