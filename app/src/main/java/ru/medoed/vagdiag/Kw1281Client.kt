@@ -71,55 +71,52 @@ class Kw1281Client(
         // timing deviates from the nominal value, so anything in 1..115200 is accepted here.
         if (startBaudRate !in 1..115200) throw IllegalArgumentException("Start Baud must be 1..115200")
         val startBitMs = 1000L / startBaudRate
-        port.setParameters(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-        // Драйвер может молча игнорировать setBreak() (некоторые сборки CH340): тогда «реле
-        // щёлкает» (порт открыт, DTR/RTS поданы), но медленный старт не формируется и ЭБУ
-        // не просыпается. Проверяем это сразу и предупреждаем, чтобы не гадать по таймауту.
+        // ВАЖНО: перед slow-init порт обязан работать на 5 бод! На 10400 бит BREAK длится
+        // доли миллисекунды, ЭБУ его не видит и молчит — ровно симптом «реле щёлкает,
+        // связи нет». Вася Диагност/kw1281test тоже ставят 5 бод до wake-up кадра.
+        setLineParamsQuietly(5, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+        // Драйвер может молча игнорировать setBreak() (некоторые сборки CH340). Проверяем
+        // это и предупреждаем, но основной путь — BREAK на линии, уже выставленной в 5 бод.
         val breakSupported = probeBreak()
         if (!breakSupported) {
             log("ВНИМАНИЕ: USB-драйвер не поддерживает setBreak() — медленный старт 5 бод имитируется " +
-                "побитовой отсылкой. Если ЭБУ не отвечает, скорее всего кабель/драйвер не годится для KKL.")
+                "UART-кадром 7O1 на 5 бод (как в kw1281test).")
         }
-        dbgVerbose("Slow-init: Start Baud=$startBaudRate (бит ≈${startBitMs} мс), пост-init baud=$baudRate, echo=${echoDelayMs}мс, BLK=${blockDelayMs}мс, Int=${interByteDelayMs}мс, DelayCharInt=${charInterDelayMs}мс, KW2 mask=%02X".format(kw2Mask))
-        // KW1281 slow init: 7 data bits, odd parity, 1 stop bit, 5 baud.
-        // Some USB-serial drivers (including some CH340 builds) do not implement setBreak().
-        // In that case, fall back to a real 5-baud UART frame instead of crashing with
-        // UnsupportedOperationException. A 5-baud byte takes about two seconds, so use 5 s timeout.
+        dbgVerbose("Slow-init: линия 5 бод, Start Baud=$startBaudRate (бит ≈${startBitMs} мс), пост-init baud=$baudRate, echo=${echoDelayMs}мс, BLK=${blockDelayMs}мс, Int=${interByteDelayMs}мс, DelayCharInt=${charInterDelayMs}мс, KW2 mask=%02X".format(kw2Mask))
         var usedBitBang = false
-        if (breakSupported) {
-            try {
-                sendSlowInitBreak(address, startBitMs)
-            } catch (_: UnsupportedOperationException) {
-                usedBitBang = true
-                sendSlowInitBitBang(address)
-            }
-        } else {
-            usedBitBang = true
-            sendSlowInitBitBang(address)
-        }
-        pause(blockDelayMs)
-        // Возврат к пост-init скорости и чтение синхры — внутри цикла ниже.
-        // Как в kw1281test/Vasya Diagnost: при отсутствии синхры повторяем slow-init
-        // (initRetryTimes попыток всего) — часть ЭБУ просыпается только со второго импульса.
+        var firstAttempt = true
         var lastError: IOException? = null
         var sync: Int? = null
         var attempt = 0
         val retries = initRetries.coerceIn(1, 5)
+        // Как в kw1281test/Vasya Diagnost: при отсутствии синхры повторяем slow-init с нуля
+        // (линия снова в 5 бод) — часть ЭБУ просыпается только со второго импульса.
         while (sync == null && attempt < retries) {
             attempt++
-            port.setParameters(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            if (!firstAttempt) {
+                log("Нет ответа ЭБУ за ${initTimeoutMs} мс (попытка $attempt/$retries) — повторяю slow-init…")
+                setLineParamsQuietly(5, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            }
+            firstAttempt = false
+            if (breakSupported) {
+                try {
+                    sendSlowInitBreak(address, startBitMs)
+                } catch (_: UnsupportedOperationException) {
+                    usedBitBang = true
+                    sendSlowInitBitBang(address)
+                }
+            } else {
+                usedBitBang = true
+                sendSlowInitBitBang(address)
+            }
+            pause(blockDelayMs)
+            // Возврат к пост-init скорости и чтение синхры
+            setLineParamsQuietly(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
             drainRx()
             try {
                 sync = readByte(initTimeoutMs)
             } catch (e: IOException) {
                 lastError = e
-                if (attempt < retries) {
-                    log("Нет ответа ЭБУ за ${initTimeoutMs} мс (попытка $attempt/$retries) — повторяю slow-init…")
-                    dbgVerbose("Повторная инициализация: адрес %02X, старт %d бод".format(address, startBaudRate))
-                    if (breakSupported && !usedBitBang) sendSlowInitBreak(address, startBitMs)
-                    else sendSlowInitBitBang(address)
-                    pause(blockDelayMs)
-                }
             }
         }
         if (sync == null) throw IOException(buildNoConnectionHint(address, startBaudRate, baudRate, usedBitBang || !breakSupported), lastError)
@@ -139,14 +136,19 @@ class Kw1281Client(
         if (key2 != rawKey2) log("KW2 маска %02X изменила keyword2: %02X -> %02X".format(kw2Mask, rawKey2, key2))
         val protocolVersion = ((key2 and 0x7F) shl 7) or (key1 and 0x7F)
         log("Sync 55; keywords %02X %02X; calculated protocol KWP%04d; baud=%d".format(key1, key2, protocolVersion, baudRate))
-        dbgVerbose("Handshake: ACK на keyword2=%02X после паузы" .format(key2.inv() and 0xFF))
-        pause(echoDelayMs)
-        writeRaw((key2.inv() and 0xFF))
-        pause(blockDelayMs.coerceAtLeast(50))
         if (protocolVersion >= 2000) {
             connected = false
             throw IOException("ЭБУ сообщил протокол KWP$protocolVersion. Эта версия приложения поддерживает только KW1281; KWP2000 пока не реализован.")
         }
+        dbgVerbose("Handshake: ACK на keyword2=%02X после паузы" .format(key2.inv() and 0xFF))
+        pause(echoDelayMs)
+        writeRaw((key2.inv() and 0xFF))
+        pause(blockDelayMs.coerceAtLeast(50))
+        // Как в kw1281test: после handshake ЭБУ ждёт ACK на линию до отправки 0x09,
+        // иначе он «закрывает» сеанс и приложение зря ловит таймауты.
+        pause(echoDelayMs)
+        writeRaw(0xC1) // AckHandshake
+        pause(blockDelayMs.coerceAtLeast(50))
         val initial = mutableListOf<Block>()
         var handshakeFinished = false
         repeat(12) {
@@ -155,7 +157,12 @@ class Kw1281Client(
             initial += block
             counter = (block.counter + 1) and 0xFF
             if (block.title == 0x09 || block.title == 0x0A) handshakeFinished = true
-            else sendBlock(0x09)
+            else {
+                // Тот же ACK между блоками, что и в kw1281test/Vasya
+                pause(echoDelayMs)
+                writeRaw(0xC1)
+                sendBlock(0x09)
+            }
         }
         if (!handshakeFinished) throw IOException("ECU did not finish initial KW1281 handshake")
         connected = true
@@ -294,6 +301,19 @@ class Kw1281Client(
     private fun ensureConnected() { if (!connected) throw IOException("Сначала подключись к ЭБУ двигателя") }
 
     /**
+     * setParameters() с мягкой обработкой ошибок: часть CH340-чипов отказывается ставить
+     * нестандартные скорости (5 бод) и бросает исключение — в этом случае логируем и
+     * продолжаем, fallback-путь (UART-кадр 7O1) всё равно попытается сработать.
+     */
+    private fun setLineParamsQuietly(baud: Int, dataBits: Int, stopBits: Int, parity: Int) {
+        try {
+            port.setParameters(baud, dataBits, stopBits, parity)
+        } catch (e: Exception) {
+            dbg("setParameters($baud бод) не удался (${e.javaClass.simpleName}: ${e.message}) — драйвер ограничивает скорости; буду использовать доступный путь инициализации")
+        }
+    }
+
+    /**
      * Проверяет, реально ли драйвер умеет setBreak(). Некоторые CH340-сборки бросают
      * UnsupportedOperationException, другие принимают вызов молча, но линию не держат.
      */
@@ -350,10 +370,9 @@ class Kw1281Client(
     private fun buildNoConnectionHint(address: Int, startBaudRate: Int, baudRate: Int, usedBitBangFallback: Boolean): String = buildString {
         appendLine("ЭБУ не ответил на slow-init (адрес %02X, старт %d бод, пост-init %d бод). Порт открыт, но K-Line молчит.".format(address, startBaudRate, baudRate))
         appendLine("Частые причины:")
-        appendLine("• Кабель не настоящий KKL (FTDI/CH340 без K+L обвязки) — линия TX не может тянуть BREAK; проверь по логам: ")
-        if (usedBitBangFallback) appendLine("  драйвер не поддержал setBreak(), использован fallback 5 бод — такие кабели часто не работают с VW KKL.")
+        if (usedBitBangFallback) appendLine("  драйвер не поддержал setBreak(), использован fallback-кадр 5 бод — проверь, что линия реально работает на такой низкой скорости.")
         appendLine("• Зажигание выключено или ЭБУ не питается (проверь предохранитель, включи зажигание перед подключением).")
         appendLine("• Неверный адрес блока или другой протокол (KWP2000/CAN вместо KW1281).")
-        appendLine("• Попробуй: другую скорость пост-init (9600/4800), увеличить Start Baud-бит или Debug level=2 для подробного лога.")
+        appendLine("• Попробуй: другую скорость пост-init (9600/4800), увеличить Init retry times до 3–5, Debug level=2 для подробного лога.")
     }.trimEnd()
 }
