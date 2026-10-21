@@ -5,7 +5,7 @@ import java.io.IOException
 
 /**
  * Minimal KW1281 tester implementation. Must be validated against a real ECU/cable before relying on it.
- * Timing knobs (Echo delay, BLK, Int, Delay Char int), Start Baud, Debug level and KW2 mask follow the
+ * Timing knobs (Echo delay, BLK, Int, Delay Char int), Start Baud and Debug level follow the
  * advanced-option model of Vasya Diagnost / kw1281test.
  */
 class Kw1281Client(
@@ -18,7 +18,6 @@ class Kw1281Client(
     private val interByteDelayMs: Int = 5,
     private val charInterDelayMs: Int = 0,
     private val debugLevel: Int = 0,
-    private val kw2Mask: Int = 0xFF,
     private val initRetryTimes: Int = 2
 ) {
     data class Block(val counter: Int, val title: Int, val data: ByteArray) {
@@ -82,7 +81,7 @@ class Kw1281Client(
             log("ВНИМАНИЕ: USB-драйвер не поддерживает setBreak() — медленный старт 5 бод имитируется " +
                 "UART-кадром 7O1 на 5 бод (как в kw1281test).")
         }
-        dbgVerbose("Slow-init: линия 5 бод, Start Baud=$startBaudRate (бит ≈${startBitMs} мс), пост-init baud=$baudRate, echo=${echoDelayMs}мс, BLK=${blockDelayMs}мс, Int=${interByteDelayMs}мс, DelayCharInt=${charInterDelayMs}мс, KW2 mask=%02X".format(kw2Mask))
+        dbgVerbose("Slow-init: линия 5 бод, Start Baud=$startBaudRate (бит ≈${startBitMs} мс), пост-init baud=$baudRate, echo=${echoDelayMs}мс, BLK=${blockDelayMs}мс, Int=${interByteDelayMs}мс, DelayCharInt=${charInterDelayMs}мс")
         var usedBitBang = false
         var firstAttempt = true
         var lastError: IOException? = null
@@ -128,12 +127,7 @@ class Kw1281Client(
             throw IOException("ЭБУ прислал 0x%02X вместо синхры 0x55.$hint Проверь скорость пост-init в настройках и качество контакта K-Line.".format(syncByte))
         }
         val key1 = readByte(responseTimeoutMs)
-        val rawKey2 = readByte(responseTimeoutMs)
-        // KW2 mask (Vasya Diagnost option): applied to keyword 2 before calculating the
-        // protocol version. The default 0xFF keeps the standard behaviour; other masks are
-        // an expert workaround for non-standard responses and should only be changed knowingly.
-        val key2 = rawKey2 and (kw2Mask and 0xFF)
-        if (key2 != rawKey2) log("KW2 маска %02X изменила keyword2: %02X -> %02X".format(kw2Mask, rawKey2, key2))
+        val key2 = readByte(responseTimeoutMs)
         val protocolVersion = ((key2 and 0x7F) shl 7) or (key1 and 0x7F)
         log("Sync 55; keywords %02X %02X; calculated protocol KWP%04d; baud=%d".format(key1, key2, protocolVersion, baudRate))
         if (protocolVersion >= 2000) {

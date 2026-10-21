@@ -4,7 +4,7 @@ import android.content.Context
 
 /**
  * Connection parameters inspired by the advanced options of Vasya Diagnost / KW1281test:
- * Start Baud, Echo delay, BLK, Int, Debug level, KW2, Delay Char int.
+ * Start Baud, Echo delay, BLK, Int, Debug level, Delay Char int.
  * Values are validated in the settings dialog; the Kw1281Client consumes them during I/O.
  */
 data class DiagnosticSettings(
@@ -24,8 +24,6 @@ data class DiagnosticSettings(
     val charInterDelayMs: Int = 0,
     /** Debug level: 0 = off, 1 = normal TX/RX byte log, 2 = verbose handshake timing. */
     val debugLevel: Int = 0,
-    /** KW2: keyword-2 mask applied to the ECU sync pattern (Vasya's default is 0xFF). */
-    val kw2Mask: Int = 0xFF,
     /** Init retry times: how many slow-init attempts before giving up (Vasya-style knob). */
     val initRetryTimes: Int = 2
 ) {
@@ -41,16 +39,15 @@ data class DiagnosticSettings(
             .putInt("inter_byte_delay_ms", interByteDelayMs)
             .putInt("char_inter_delay_ms", charInterDelayMs)
             .putInt("debug_level", debugLevel)
-            .putInt("kw2_mask", kw2Mask)
             .putInt("init_retry_times", initRetryTimes)
             .apply()
     }
 
     /** Concise one-line summary for the diagnostic log when settings are saved. */
     fun describe(): String =
-        "адрес %02X, старт %d бод, пост-init %d бод, echo %d мс, BLK %d мс, Int %d мс, DelayCharInt %d мс, Debug %d, KW2 %02X, повторов инициализации %d".format(
+        "адрес %02X, старт %d бод, пост-init %d бод, echo %d мс, BLK %d мс, Int %d мс, DelayCharInt %d мс, Debug %d, повторов инициализации %d".format(
             ecuAddress, startBaudRate, baudRate, echoDelayMs, blockDelayMs,
-            interByteDelayMs, charInterDelayMs, debugLevel, kw2Mask, initRetryTimes
+            interByteDelayMs, charInterDelayMs, debugLevel, initRetryTimes
         )
 
     companion object {
@@ -68,7 +65,6 @@ data class DiagnosticSettings(
                 interByteDelayMs = p.getInt("inter_byte_delay_ms", 5),
                 charInterDelayMs = p.getInt("char_inter_delay_ms", 0),
                 debugLevel = p.getInt("debug_level", 0),
-                kw2Mask = p.getInt("kw2_mask", 0xFF),
                 initRetryTimes = p.getInt("init_retry_times", 2)
             )
         }

@@ -329,11 +329,9 @@ class MainActivity : Activity() {
         val intDelay = field("Int — межбайтовая задержка в блоке, мс (0..100)", current.interByteDelayMs)
         val charIntDelay = field("Delay Char int — доп. пауза между символами, мс (0..100)", current.charInterDelayMs)
         val debug = field("Debug level: 0 выкл, 1 байты TX/RX, 2 максимально подробно", current.debugLevel)
-        val kw2 = field("KW2 — маска keyword2, HEX (например FF или 7F)", current.kw2Mask,
-            android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS)
         val retries = field("Init retry times — повторов slow-init при отсутствии ответа (1..5)", current.initRetryTimes)
         fields.addView(TextView(this).apply {
-            text = "Дополнительные параметры (Echo delay, BLK, Int, Delay Char int, Debug level, KW2) повторяют настройки Васи Диагноста. Меняй только при диагностике проблем с таймингами KKL-кабеля."
+            text = "Дополнительные параметры (Echo delay, BLK, Int, Delay Char int, Debug level) повторяют настройки Васи Диагноста. Меняй только при диагностике проблем с таймингами KKL-кабеля."
             textSize = 11f
             setTextColor(0xFF647C91.toInt())
             setPadding(0, dp(10), 0, dp(4))
@@ -366,7 +364,6 @@ class MainActivity : Activity() {
                         val charInt = charIntDelay.text.toString().toIntOrNull()
                         val dbgLvl = debug.text.toString().toIntOrNull()
                         val rt = retries.text.toString().toIntOrNull()
-                        val kw2v = kw2.text.toString().trim().removePrefix("0x").removePrefix("0X").toIntOrNull(16)
                         val error = when {
                             a == null || a !in 0..127 -> "Адрес должен быть от 0 до 127"
                             sb == null || sb !in 1..115200 -> "Start Baud: от 1 до 115200 (обычно 5)"
@@ -379,7 +376,6 @@ class MainActivity : Activity() {
                             charInt == null || charInt !in 0..100 -> "Delay Char int: 0–100 мс"
                             dbgLvl == null || dbgLvl !in 0..2 -> "Debug level: 0, 1 или 2"
                             rt == null || rt !in 1..5 -> "Повторов инициализации: 1–5"
-                            kw2v == null || kw2v !in 0..0xFF -> "KW2: HEX-значение 00–FF"
                             else -> null
                         }
                         if (error != null) {
@@ -390,15 +386,12 @@ class MainActivity : Activity() {
                             ecuAddress = a!!, baudRate = b!!, responseTimeoutMs = r!!, initTimeoutMs = i!!,
                             startBaudRate = sb!!, echoDelayMs = echo!!, blockDelayMs = blk!!,
                             interByteDelayMs = inter!!, charInterDelayMs = charInt!!,
-                            debugLevel = dbgLvl!!, kw2Mask = kw2v!!, initRetryTimes = rt!!
+                            debugLevel = dbgLvl!!, initRetryTimes = rt!!
                         )
                         diagnosticSettings.save(this)
                         kwClient = null
                         scanButton.text = "Подключиться к ЭБУ · адрес %02X".format(diagnosticSettings.ecuAddress)
                         appendLog("Настройки сохранены: ${diagnosticSettings.describe()}")
-                        if (diagnosticSettings.kw2Mask != 0xFF) {
-                            appendLog("Внимание: KW2 маска изменена с %02X. Это может исказить расчёт версии протокола KWP.".format(0xFF))
-                        }
                         dialog.dismiss()
                     }
                 }
@@ -566,7 +559,6 @@ class MainActivity : Activity() {
                     interByteDelayMs = diagnosticSettings.interByteDelayMs,
                     charInterDelayMs = diagnosticSettings.charInterDelayMs,
                     debugLevel = diagnosticSettings.debugLevel,
-                    kw2Mask = diagnosticSettings.kw2Mask,
                     initRetryTimes = diagnosticSettings.initRetryTimes
                 ).also { kwClient = it }
                 val result = action(client)
@@ -629,7 +621,6 @@ class MainActivity : Activity() {
                         interByteDelayMs = diagnosticSettings.interByteDelayMs,
                         charInterDelayMs = diagnosticSettings.charInterDelayMs,
                         debugLevel = diagnosticSettings.debugLevel,
-                        kw2Mask = diagnosticSettings.kw2Mask,
                         initRetryTimes = diagnosticSettings.initRetryTimes
                     )
                     val handshake = client.connect(address, baud, startBaudRate = diagnosticSettings.startBaudRate)
