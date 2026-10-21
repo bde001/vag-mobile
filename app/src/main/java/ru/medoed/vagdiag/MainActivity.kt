@@ -424,14 +424,14 @@ class MainActivity : Activity() {
                             return@setOnClickListener
                         }
                         diagnosticSettings = DiagnosticSettings(
-                            ecuAddress = a, baudRate = b, responseTimeoutMs = r!!, initTimeoutMs = i!!,
+                            ecuAddress = a!!, baudRate = b, responseTimeoutMs = r!!, initTimeoutMs = i!!,
                             startBaudRate = sb, echoDelayMs = echo!!, blockDelayMs = blk!!,
                             interByteDelayMs = inter!!, charInterDelayMs = charInt!!,
                             debugLevel = dbgLvl, initRetryTimes = rt!!,
                             protocolMode = if (sb >= 1000) 2 else 1
                         )
                         diagnosticSettings.save(this)
-                        if (::addressField.isInitialized) addressField.setText("%02X".format(a))
+                        if (::addressField.isInitialized) addressField.setText("%02X".format(a!!))
                         kwClient = null
                         appendLog("Настройки сохранены: ${diagnosticSettings.describe()}")
                         dialog.dismiss()
