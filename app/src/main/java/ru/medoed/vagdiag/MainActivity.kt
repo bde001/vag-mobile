@@ -91,7 +91,7 @@ class MainActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(permissionReceiver, filter)
         }
-        appendLog("VCDS-KW1281 1.3.0-alpha started")
+        appendLog("Vasya Diag 1.5.0-alpha started (интерфейс как VCDS/Вася)")
         appendLog("Vehicle   : Golf IV 1.6 16V BCB / Interface: USB KKL CH340")
         appendLog("KW1281 only. No fabricated ECU data; validation on real vehicle required.")
         val logFile = currentLogFile
@@ -113,161 +113,175 @@ class MainActivity : Activity() {
         super.onPause()
     }
 
+    // ==== Палитра «как VCDS/Vasya»: светло-серый Windows-фон, синие заголовки, белые поля ====
+    private val uiFace = 0xFFD4D0C8.toInt()      // классический системный цвет окна
+    private val uiPanel = 0xFFF5F8FB.toInt()     // светлые панели/поля
+    private val uiBorder = 0xFF9DB3C8.toInt()    // рамки полей
+    private val uiText = 0xFF153653.toInt()      // основной тёмно-синий текст подписей
+    private val uiAccent = 0xFF075CB5.toInt()    // ярко-синий (заголовки, активные элементы)
+    private val uiDim = 0xFF647C91.toInt()       // второстепенный серо-синий
+    private val uiError = 0xFF9B2C2C.toInt()     // красный для ошибок
+    private val uiOk = 0xFF237A45.toInt()        // зелёный для «подключено»
+
     /**
-     * VCDS-стиль: тёмный «терминальный» интерфейс с зелёным моноширинным текстом.
-     * Верхняя панель — статус соединения (как «Testers / Vehicle / Mode» в VCDS),
-     * ниже — выбор блока (Select Control Module), функциональные кнопки в ряд
-     * (Read Measuring Blocks / Read Fault Codes / Clear Fault Codes / Basic Settings /
-     * Identification / Prototype Coding) и большое окно вывода (Output window).
+     * Полная копия стиля Vasya Diagnost / VCDS-Lite: светло-серое «окно Windows»,
+     * синие заголовки секций, белые поля ввода с рамками, серые 3D-кнопки,
+     * белый лог-терминал с моноширинным тёмным текстом.
      */
     private fun buildUi() {
-        val bg = 0xFF0A0A0A.toInt()          // почти чёрный фон, как окно VCDS
-        val panel = 0xFF101010.toInt()       // панели чуть светлее
-        val green = 0xFF00E000.toInt()       // основной зелёный текст
-        val brightGreen = 0xFF6AFF6A.toInt() // подсветка активной кнопки
-        val dimGreen = 0xFF008F3A.toInt()    // второстепенный текст
-        // (amber зарезервирован под будущие предупреждения в стиле VCDS)
-        val red = 0xFFFF5F5F.toInt()         // ошибка/не активно
         val mono = android.graphics.Typeface.MONOSPACE
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(bg)
-            setPadding(dp(6), dp(6), dp(6), dp(6))
+            setBackgroundColor(uiFace)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
         }
 
-        // ===== Верхняя строка статуса (аналог шапки VCDS) =====
+        // ===== Шапка: синий заголовок + кнопка [Help] справа, как в Васе =====
         val headRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), dp(6), dp(4), dp(6))
+            setPadding(dp(2), dp(2), dp(2), dp(6))
         }
         headRow.addView(TextView(this).apply {
-            text = "VCDS-KW1281"; textSize = 17f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(green)
+            text = "Диагностика K-Line · KW1281"; textSize = 16f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD; setTextColor(uiAccent)
         }, LinearLayout.LayoutParams(0, -2, 1f))
         val menuButton = TextView(this).apply {
-            text = "[Меню]"
-            textSize = 14f; typeface = mono; gravity = Gravity.CENTER
-            setTextColor(green); isClickable = true; isFocusable = true
+            text = "[ Help ]"; textSize = 13f; typeface = mono; gravity = Gravity.CENTER
+            setTextColor(uiText); isClickable = true; isFocusable = true
             setPadding(dp(10), dp(4), dp(10), dp(4))
+            background = buttonBg()
             setOnClickListener { showNavigationMenu(this) }
         }
         headRow.addView(menuButton)
         root.addView(headRow)
 
+        // ===== Панель статуса:Tester / Vehicle / Connection, как три строки Васи =====
+        val statusPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(uiPanel, 4, 4, 4, 4, border = true)
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+        }
         status = TextView(this).apply {
-            text = "K-TESTER : NOT CONNECTED"; textSize = 13f; typeface = mono
-            setTextColor(red); setPadding(dp(6), dp(4), dp(6), dp(4))
+            text = "Тестер      : НЕ ПОДКЛЮЧЁН"; textSize = 13f; typeface = mono
+            setTextColor(uiError)
         }
-        root.addView(status, matchWrap())
+        statusPanel.addView(status, matchWrapTight())
         deviceInfo = TextView(this).apply {
-            text = "VEHICLE   : Golf IV 1.6 16V BCB (ME7.5.10?)"; textSize = 12f; typeface = mono
-            setTextColor(dimGreen); setPadding(dp(6), 0, dp(6), dp(4))
+            text = "Адаптер     : USB KKL CH340"; textSize = 12f; typeface = mono
+            setTextColor(uiText)
         }
-        root.addView(deviceInfo, matchWrap())
+        statusPanel.addView(deviceInfo, matchWrapTight())
+        statusPanel.addView(TextView(this).apply {
+            text = "Автомобиль  : VW Golf IV 1.6 16V BCB / MM 4MV"; textSize = 12f; typeface = mono
+            setTextColor(uiText)
+        }, matchWrapTight())
+        root.addView(statusPanel, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
 
-        // ===== Кнопки адаптера =====
-        val adapterRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        connectButton = vcdsButton("Connect", green) { refreshDevices() }
-        adapterRow.addView(connectButton, vcdsBtnParams())
-        adapterRow.addView(vcdsButton("Disconnect", green) { disconnectAdapter() }, vcdsBtnParams())
-        root.addView(adapterRow, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
-
-        // ===== Выбор адреса блока (Select Control Module) =====
+        // ===== Секция «Выбор адреса» — как верхнее окно «Select Control Module» =====
+        root.addView(sectionHeader("Выбор адреса"))
+        val addrPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(uiPanel, 4, 4, 4, 4, border = true)
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+        }
         val addrRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         addrRow.addView(TextView(this).apply {
-            text = "Adresse:"; textSize = 14f; typeface = mono; setTextColor(green)
+            text = "Адрес:"; textSize = 14f; typeface = mono; setTextColor(uiText)
             setPadding(0, 0, dp(8), 0)
         })
         addressField = EditText(this).apply {
             setText("%02X".format(diagnosticSettings.ecuAddress)); setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT
             filters = arrayOf(android.text.InputFilter.LengthFilter(2))
-            textSize = 16f; typeface = mono; setTextColor(brightGreen); setHintTextColor(dimGreen)
+            textSize = 16f; typeface = mono; setTextColor(uiAccent); setHintTextColor(uiDim)
             gravity = Gravity.CENTER
-            background = rounded(panel, 4, 4, 4, 4)
+            background = rounded(0xFFFFFFFF.toInt(), 3, 3, 3, 3, border = true)
             setPadding(dp(10), dp(8), dp(10), dp(8))
         }
-        addrRow.addView(addressField, LinearLayout.LayoutParams(dp(72), -2).apply { marginEnd = dp(8) })
+        addrRow.addView(addressField, LinearLayout.LayoutParams(dp(80), -2).apply { marginEnd = dp(10) })
         addrRow.addView(TextView(this).apply {
-            text = "(01 Motronic · 03 ABS · 15 Airbag · 17 Panel · 08 Climat…)"; textSize = 10f
-            typeface = mono; setTextColor(dimGreen)
+            text = "01 Двигатель · 03 ABS/ESP · 15 Airbag\n17 Комбинация · 08 Климат · 25 Иммоб."; textSize = 10f
+            typeface = mono; setTextColor(uiDim)
         }, LinearLayout.LayoutParams(0, -2, 1f))
-        root.addView(addrRow, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(2); bottomMargin = dp(2) })
+        addrPanel.addView(addrRow, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
 
-        settingsButton = vcdsButton("Protocol settings…", dimGreen) { showDiagnosticSettings() }
-        root.addView(settingsButton, matchWrap())
+        val connRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        connectButton = winButton("Подключить") { refreshDevices() }
+        connRow.addView(connectButton, winBtnParams())
+        connRow.addView(winButton("Отключить") { disconnectAdapter() }, winBtnParams())
+        connRow.addView(winButton("Настройки протокола…") { showDiagnosticSettings() }, winBtnParams())
+        addrPanel.addView(connRow, LinearLayout.LayoutParams(-1, -2))
+        settingsButton = connRow.getChildAt(2) as Button
+        root.addView(addrPanel, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
+        quickAccessAnchor = addrPanel
 
-        // ===== Функциональные кнопки, как нижний ряд окон VCDS =====
+        // ===== Секция «Функции диагностики» — кнопки рядами, как окна функций у Васи =====
+        root.addView(sectionHeader("Функции диагностики"))
+        val fnPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(uiPanel, 4, 4, 4, 4, border = true)
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+        }
         fun fnRow(vararg labels: Pair<String, () -> Unit>) {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             labels.forEach { (label, action) ->
-                val btn = vcdsButton(label, green, action = action)
-                btn.setOnTouchListener { v, e ->
-                    when (e.actionMasked) {
-                        android.view.MotionEvent.ACTION_DOWN -> (v as Button).setTextColor(0xFF6AFF6A.toInt())
-                        android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
-                            (v as Button).setTextColor(green)
-                    }
-                    false
-                }
-                row.addView(btn, vcdsBtnParams())
+                row.addView(winButton(label, action = action), winBtnParams())
             }
-            root.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
+            fnPanel.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(5) })
         }
         fnRow(
             "Autoscan" to { scanControllers() },
-            "Read Measuring Block" to { readMeasuringBlock() }
-        )
-        fnRow(
-            "Read Fault Codes" to {
-                runDiagnostic("Чтение DTC") { client -> ensureSession(client); client.readFaults() }
-            },
-            "Clear Fault Codes" to { confirmClearFaults() }
-        )
-        fnRow(
-            "Basic Settings" to {
-                runDiagnostic("Базовые установки") { client -> ensureSession(client); client.readBasicSettings() }
-            },
-            "Identification" to {
+            "Идентификация" to {
                 runDiagnostic("Идентификация") { client -> ensureSession(client); client.readIdentification() }
             }
         )
-
-        // Номер группы для измерений — отдельная строка ввода, как поле в окне VCDS
+        fnRow(
+            "Чтение ошибок" to {
+                runDiagnostic("Чтение DTC") { client -> ensureSession(client); client.readFaults() }
+            },
+            "Сброс ошибок" to { confirmClearFaults() }
+        )
+        fnRow(
+            "Базовые параметры" to {
+                runDiagnostic("Базовые установки") { client -> ensureSession(client); client.readBasicSettings() }
+            },
+            "Измерения" to { readMeasuringBlock() }
+        )
+        // Группа измерений — поле как в Васе
         val groupRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         groupRow.addView(TextView(this).apply {
-            text = "Group:"; textSize = 14f; typeface = mono; setTextColor(green)
+            text = "Группа:"; textSize = 14f; typeface = mono; setTextColor(uiText)
             setPadding(0, 0, dp(8), 0)
         })
         groupInput = EditText(this).apply {
             setText("001"); setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
             filters = arrayOf(android.text.InputFilter.LengthFilter(3))
-            textSize = 16f; typeface = mono; setTextColor(brightGreen)
+            textSize = 16f; typeface = mono; setTextColor(uiAccent)
             gravity = Gravity.CENTER
-            background = rounded(panel, 4, 4, 4, 4)
+            background = rounded(0xFFFFFFFF.toInt(), 3, 3, 3, 3, border = true)
             setPadding(dp(10), dp(8), dp(10), dp(8))
         }
-        groupRow.addView(groupInput, LinearLayout.LayoutParams(dp(72), -2))
+        groupRow.addView(groupInput, LinearLayout.LayoutParams(dp(80), -2))
         groupRow.addView(TextView(this).apply {
-            text = "  (000–255)"; textSize = 11f; typeface = mono; setTextColor(dimGreen)
+            text = "  (000–255)"; textSize = 11f; typeface = mono; setTextColor(uiDim)
         })
-        root.addView(groupRow, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
+        groupRow.setPadding(0, dp(2), 0, 0)
+        fnPanel.addView(groupRow, LinearLayout.LayoutParams(-1, -2))
+        root.addView(fnPanel, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
+        diagnosticAnchor = fnPanel
 
-        // ===== Окно вывода (Output window) — то же поле, что и журнал =====
-        root.addView(TextView(this).apply {
-            text = "Output:"; textSize = 13f; typeface = mono; setTextColor(green)
-            setPadding(dp(4), dp(4), dp(4), dp(2))
-        })
+        // ===== Секция «Журнал» — белое терминальное окно, как вывод у Васи =====
+        root.addView(sectionHeader("Журнал"))
         val outFrame = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(0xFF050505.toInt(), 4, 4, 4, 4)
+            background = rounded(0xFFFFFFFF.toInt(), 3, 3, 3, 3, border = true)
             setPadding(dp(2), dp(2), dp(2), dp(2))
         }
         logView = TextView(this).apply {
             textSize = 12f; typeface = mono
-            setTextColor(green); setPadding(dp(10), dp(10), dp(10), dp(10))
+            setTextColor(0xFF1A1A1A.toInt()); setPadding(dp(10), dp(10), dp(10), dp(10))
             text = ""
             movementMethod = android.text.method.ScrollingMovementMethod.getInstance()
         }
@@ -277,32 +291,48 @@ class MainActivity : Activity() {
         }
         mainScroll = outScroll
         outFrame.addView(outScroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(outFrame, LinearLayout.LayoutParams(-1, 0, 1f).apply { bottomMargin = dp(4) })
+        root.addView(outFrame, LinearLayout.LayoutParams(-1, 0, 1f).apply { bottomMargin = dp(6) })
         logAnchor = outFrame
-        quickAccessAnchor = addrRow
-        diagnosticAnchor = groupRow
 
-        // ===== Нижняя строка: действия с журналом =====
+        // ===== Нижняя строка: действия с журналом, как кнопки внизу окна =====
         val bottomRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        bottomRow.addView(vcdsButton("Save log", dimGreen) { shareLogs() }, vcdsBtnParams())
-        bottomRow.addView(vcdsButton("Logs…", dimGreen) { openLogBrowser() }, vcdsBtnParams())
-        bottomRow.addView(vcdsButton("Clear screen", dimGreen) { logView.text = "" }, vcdsBtnParams())
+        bottomRow.addView(winButton("Сохранить лог", dim = true) { shareLogs() }, winBtnParams())
+        bottomRow.addView(winButton("Логи…", dim = true) { openLogBrowser() }, winBtnParams())
+        bottomRow.addView(winButton("Очистить экран", dim = true) { logView.text = "" }, winBtnParams())
         root.addView(bottomRow, LinearLayout.LayoutParams(-1, -2))
 
         setContentView(root)
     }
 
-    /** Кнопка в стиле VCDS: тёмный фон, цветная моноширинная рамка-подсветка при нажатии. */
-    private fun vcdsButton(label: String, color: Int, action: () -> Unit): Button = Button(this).apply {
-        text = label; isAllCaps = false; textSize = 13f; typeface = android.graphics.Typeface.MONOSPACE
-        minHeight = dp(42)
-        setTextColor(color)
-        background = rounded(0xFF141414.toInt(), 4, 4, 4, 4)
+    /** Синий заголовок секции, как «Select Control Module» в Васе. */
+    private fun sectionHeader(title: String) = TextView(this).apply {
+        text = title; textSize = 14f; typeface = android.graphics.Typeface.DEFAULT_BOLD
+        setTextColor(uiAccent); setPadding(dp(2), dp(4), dp(2), dp(4))
+    }
+
+    /** Кнопка в стиле Win32/Вася: серый градиент, тонкая рамка, тёмный текст. */
+    private fun winButton(label: String, dim: Boolean = false, action: () -> Unit): Button = Button(this).apply {
+        text = label; isAllCaps = false; textSize = 13f
+        typeface = if (dim) android.graphics.Typeface.MONOSPACE else android.graphics.Typeface.SANS_SERIF
+        minHeight = dp(44)
+        setTextColor(if (dim) uiDim else uiText)
+        background = buttonBg()
+        stateListAnimator = null
         setPadding(dp(6), dp(4), dp(6), dp(4))
         setOnClickListener { action() }
     }
 
-    private fun vcdsBtnParams() = LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(4) }
+    private fun buttonBg(): android.graphics.drawable.GradientDrawable =
+        android.graphics.drawable.GradientDrawable().apply {
+            orientation = android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM
+            colors = intArrayOf(0xFFFFFFFF.toInt(), 0xFFE8E6DF.toInt(), 0xFFD7D4CC.toInt())
+            cornerRadius = dp(3).toFloat()
+            setStroke(dp(1), 0xFF8A99A8.toInt())
+        }
+
+    private fun winBtnParams() = LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(5) }
+
+    private fun matchWrapTight() = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(2) }
 
     /** Подключение по текущему адресу из поля Adresse (если сеанса ещё нет). */
     private fun ensureSession(client: Kw1281Client) {
@@ -345,7 +375,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             isClickable = true; isFocusable = true
             setPadding(dp(12), dp(11), dp(12), dp(11))
-            background = rounded(0xFFF5F8FB.toInt(), 10, 10, 10, 10)
+            background = rounded(0xFFFFFFFF.toInt(), 3, 3, 3, 3, border = true)
         }
         var selectedIndex = options.indexOfFirst { it.second == selectedValue }.coerceAtLeast(0)
         fun render() { spinnerLabel.text = options[selectedIndex].first + "     \u25BE" }
@@ -380,6 +410,7 @@ class MainActivity : Activity() {
                 this.inputType = inputType
                 setText(value.toString())
                 textSize = 15f
+                background = rounded(0xFFFFFFFF.toInt(), 3, 3, 3, 3, border = true)
                 setPadding(dp(10), dp(8), dp(10), dp(8))
             }.also { fields.addView(it, LinearLayout.LayoutParams(-1, -2)) }
         }
@@ -510,11 +541,12 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private fun rounded(color: Int, tl: Int, tr: Int, br: Int, bl: Int): android.graphics.drawable.GradientDrawable =
+    private fun rounded(color: Int, tl: Int, tr: Int, br: Int, bl: Int, border: Boolean = false): android.graphics.drawable.GradientDrawable =
         android.graphics.drawable.GradientDrawable().apply {
             setColor(color)
             cornerRadii = floatArrayOf(dp(tl).toFloat(), dp(tl).toFloat(), dp(tr).toFloat(), dp(tr).toFloat(),
                 dp(br).toFloat(), dp(br).toFloat(), dp(bl).toFloat(), dp(bl).toFloat())
+            if (border) setStroke(dp(1), uiBorder)
         }
 
     private fun matchWrap() = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) }
@@ -524,9 +556,10 @@ class MainActivity : Activity() {
         try {
             val drivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
             if (drivers.isEmpty()) {
-                deviceInfo.text = "USB-serial адаптер не найден. Подключи KKL через OTG и разреши доступ."
+                deviceInfo.text = "Адаптер     : USB-serial адаптер не найден.\n              Подключи KKL через OTG и разреши доступ."
                 appendLog("No supported USB serial devices found")
-                status.text = "● Адаптер не подключён"
+                status.text = "Тестер      : Адаптер не подключён"
+                status.setTextColor(uiError)
                 return
             }
             val driver = drivers.firstOrNull { d ->
@@ -535,7 +568,7 @@ class MainActivity : Activity() {
                 id == 0x1A86 || d.ports.isNotEmpty()
             } ?: drivers.first()
             val dev = driver.device
-            deviceInfo.text = "Найден USB-адаптер: VID %04X · PID %04X\nУстройство: %s".format(Locale.US, dev.vendorId, dev.productId, dev.deviceName)
+            deviceInfo.text = "Адаптер     : Найден USB: VID %04X · PID %04X\n              Устройство: %s".format(Locale.US, dev.vendorId, dev.productId, dev.deviceName)
             appendLog("Found USB device VID=%04X PID=%04X".format(Locale.US, dev.vendorId, dev.productId))
             if (usbManager.hasPermission(dev)) openDevice(dev) else {
                 val intent = Intent(actionUsbPermission).setPackage(packageName)
@@ -571,13 +604,13 @@ class MainActivity : Activity() {
                 connectedDevice = device
                 runOnUiThread {
                     hideBusy()
-                    status.text = "● USB-адаптер подключён"; status.setTextColor(0xFF237A45.toInt())
-                    deviceInfo.text = "USB открыт: VID %04X · PID %04X\nГотов к подключению · режим: %s".format(Locale.US, device.vendorId, device.productId, if (diagnosticSettings.fastInit) "fast-init 9600 (как в Васе)" else "slow-init 5 бод")
+                    status.text = "Тестер      : USB открыт"; status.setTextColor(uiOk)
+                    deviceInfo.text = "Адаптер     : VID %04X · PID %04X\n              Готов к подключению · режим: %s".format(Locale.US, device.vendorId, device.productId, if (diagnosticSettings.fastInit) "fast-init 9600 (как в Васе)" else "slow-init 5 бод")
                     appendLog("USB serial port opened; UART configured 10400 8N1")
                     appendLog("Адаптер готов. Связь с ЭБУ ещё не установлена — нажми «Подключить ЭБУ двигателя».")
                 }
             } catch (e: Exception) {
-                runOnUiThread { hideBusy(); appendLog("Open failed: ${e.message}"); status.text = "● Не удалось открыть адаптер"; status.setTextColor(0xFF9B2C2C.toInt()) }
+                runOnUiThread { hideBusy(); appendLog("Open failed: ${e.message}"); status.text = "Тестер      : Не удалось открыть адаптер"; status.setTextColor(uiError) }
             }
         }
     }
@@ -724,9 +757,9 @@ class MainActivity : Activity() {
             closePort()
             runOnUiThread {
                 hideBusy()
-                status.text = "● Адаптер отключён"
-                status.setTextColor(0xFF9B2C2C.toInt())
-                deviceInfo.text = "USB-порт закрыт"
+                status.text = "Тестер      : Адаптер отключён"
+                status.setTextColor(uiError)
+                deviceInfo.text = "Адаптер     : USB-порт закрыт"
                 appendLog("USB-адаптер отключён")
             }
         }
