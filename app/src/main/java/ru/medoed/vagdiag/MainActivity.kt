@@ -91,7 +91,7 @@ class MainActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(permissionReceiver, filter)
         }
-        appendLog("Vasya Diag 1.6.0-alpha started (интерфейс как VCDS/Вася)")
+        appendLog("Vasya Diag 1.7.0-alpha started (интерфейс как VCDS/Вася)")
         appendLog("Vehicle   : Golf IV 1.6 16V BCB / Interface: USB KKL CH340")
         appendLog("KW1281 only. No fabricated ECU data; validation on real vehicle required.")
         val logFile = currentLogFile
@@ -246,7 +246,26 @@ class MainActivity : Activity() {
             "Базовые параметры" to {
                 runDiagnostic("Базовые установки") { client -> ensureSession(client); client.readBasicSettings() }
             },
-            "Измерения" to { readMeasuringBlock() }
+            "Версия ПО" to {
+                runDiagnostic("Версия ЭБУ") { client -> ensureSession(client); client.readVersion() }
+            }
+        )
+        fnRow(
+            "Output Test" to {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Output Test — адрес %02X".format(currentAddress()))
+                    .setMessage("ЭБУ начнёт по очереди активировать исполнительные механизмы (вентилятор охлаждения, форсунки и т.п.). Делай только на исправном моторе при выключенных потребителях. Продолжить?")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Run") { _, _ ->
+                        runDiagnostic("Output Test") { client -> ensureSession(client); client.outputTest() }
+                    }
+                    .show()
+            },
+            "Отключить сеанс" to {
+                runDiagnostic("Завершение сеанса") { client ->
+                    if (!client.isConnected()) "Сеанс не открыт" else { client.disconnect(); "Сеанс KW1281 закрыт (команда 0x06)" }
+                }
+            }
         )
         // Группа измерений — поле как в Васе
         val groupRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -267,6 +286,7 @@ class MainActivity : Activity() {
         groupRow.addView(TextView(this).apply {
             text = "  (000–255)"; textSize = 11f; typeface = mono; setTextColor(uiDim)
         })
+        groupRow.addView(winButton("Измерения", action = { readMeasuringBlock() }), LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
         groupRow.setPadding(0, dp(2), 0, 0)
         fnPanel.addView(groupRow, LinearLayout.LayoutParams(-1, -2))
         root.addView(fnPanel, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })

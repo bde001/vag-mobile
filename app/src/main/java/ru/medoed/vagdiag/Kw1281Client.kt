@@ -28,6 +28,7 @@ class Kw1281Client(
 
     private var counter: Int = 0
     private var connected = false
+    fun isConnected(): Boolean = connected
 
     /** Debug level 1+: normal byte-level TX/RX logging; level 2 adds extra handshake detail. */
     private fun dbg(message: String) { if (debugLevel >= 1) log(message) }
@@ -186,11 +187,48 @@ class Kw1281Client(
     @Synchronized
     fun readIdentification(): String {
         ensureConnected()
+        // Как в Васе: команда 0x00, читаем блоки F6 (VIN-подобная), F7/F9 (номер детали),
+        // FA (кодировка), FB (дата прошивки).
         val blocks = request(0x00)
-        val text = blocks.filter { it.title == 0xF6 }.flatMap { it.data.toList() }
-            .map { it.toInt() and 0xFF }.filter { it in 0x20..0x7E || it == 0x0A || it == 0x0D }
+        fun asciiOf(title: Int): String = blocks.filter { it.title == title }.flatMap { it.data.toList() }
+            .map { it.toInt() and 0xFF }.filter { it in 0x20..0x7E }
             .map { it.toChar() }.joinToString("").trim()
-        return if (text.isNotBlank()) text else blocks.joinToString("\n") { "Block %02X: %s".format(it.title, it.hex()) }
+        val parts = buildList {
+            val vF6 = asciiOf(0xF6); if (vF6.isNotBlank()) add("Вин код (F6): $vF6")
+            val vF7 = asciiOf(0xF7); if (vF7.isNotBlank()) add("Номер детали (F7): $vF7")
+            val vF9 = asciiOf(0xF9); if (vF9.isNotBlank()) add("Доп. идентификация (F9): $vF9")
+            val vFA = asciiOf(0xFA); if (vFA.isNotBlank()) add("Кодирование (FA): $vFA")
+            val vFB = asciiOf(0xFB); if (vFB.isNotBlank()) add("Дата прошивки (FB): $vFB")
+        }
+        if (parts.isNotEmpty()) return parts.joinToString("\n")
+        return blocks.joinToString("\n") { "Block %02X: %s".format(it.title, it.hex()) }
+    }
+
+    /**
+     * Версия ПО ЭБУ — как поле «Версия» в Васе: команда 0x04, ответ приходит блоками F2
+     * (три байта версии + ASCII-комментарий).
+     */
+    @Synchronized
+    fun readVersion(): String {
+        ensureConnected()
+        val blocks = request(0x04)
+        val f2 = blocks.filter { it.title == 0xF2 }.flatMap { it.data.toList() }
+        if (f2.isEmpty()) return "ЭБУ не вернул блок версии (F2).\nСырые ответы:\n" + blocks.joinToString("\n") { "${it.title.toString(16).uppercase()}: ${it.hex()}" }
+        val sb = StringBuilder()
+        var i = 0
+        while (i < f2.size) {
+            val a = f2[i].toInt() and 0xFF
+            val b = if (i + 1 < f2.size) f2[i + 1].toInt() and 0xFF else 0
+            val c = if (i + 2 < f2.size) f2[i + 2].toInt() and 0xFF else 0
+            sb.append("Версия: %d.%d.%d".format(a, b, c))
+            i += 3
+            val commentStart = i
+            while (i < f2.size && (f2[i].toInt() and 0xFF) in 0x20..0x7E) i++
+            if (i > commentStart) sb.append(" · ").append(f2.copyOfRange(commentStart, i).map { (it.toInt() and 0xFF).toChar() }.joinToString(""))
+            sb.append('\n')
+            if (i < f2.size && (f2[i].toInt() and 0xFF) == 0x00) i++ // разделитель записей
+        }
+        return sb.toString().trim()
     }
 
     @Synchronized
@@ -252,6 +290,20 @@ class Kw1281Client(
         val hex = payload.joinToString(" ") { "%02X".format(it) }
         val ascii = payload.map { c -> val v = c.toInt() and 0xFF; if (v in 0x20..0x7E) c.toInt().toChar() else '.' }.joinToString("")
         return "Базовые установки (ReadCoding 0x3E), %d байт:\nHEX:  %s\nASCII: %s\nВнимание: запись изменений (WriteCoding 0x3F) намеренно не реализована — неверный код выведет ЭБУ из строя.".format(payload.size, hex, ascii)
+    }
+
+    /**
+     * Output Test — как кнопка «Output Test» в Васе/VCDS: команда 0x21 без параметров.
+     * ЭБУ по очереди включает исполнительные механизмы (вентилятор, форсунки и т.д.),
+     * отвечая блоками; показываем сырые блоки — расшифровка зависит от ЭБУ.
+     */
+    @Synchronized
+    fun outputTest(): String {
+        ensureConnected()
+        val blocks = request(0x21)
+        return "Output Test (команда 0x21) — ответов блоков: ${blocks.size}\n" +
+            blocks.joinToString("\n") { "title=%02X data=%s".format(it.title, it.hex()) } +
+            "\nВнимание: тест активирует исполнительные механизмы — выполняй только на исправном моторе по инструкции."
     }
 
     @Synchronized
