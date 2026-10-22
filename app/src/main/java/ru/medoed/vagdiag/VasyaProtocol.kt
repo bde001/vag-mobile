@@ -26,7 +26,7 @@ object VasyaProtocol {
     /** Суммарное время прижатия K-Line для имитации бита 5 бод. */
     private const val SLOW_BIT_MS = 200L
 
-    enum class InitMethod { FIVE_BAUD_FRAME, SERIAL_BREAK_FRAME, FAST_INIT_9600 }
+    enum class InitMethod { FIVE_BAUD_FRAME, SERIAL_BREAK_FRAME, FAST_INIT_9600, SOFT_FAST_BREAK }
 
     /**
      * Каскад автоподбора метода инициализации (как подбор протокола в Васе):
@@ -39,7 +39,12 @@ object VasyaProtocol {
         val wantFast = startBaud >= 1000
         if (wantFast) {
             if (probeFastBreak(port, log)) return InitMethod.FAST_INIT_9600.also { cached = it }
-            dbg("Аппаратный break для fast-init недоступен — перехожу к slow-init путям")
+            // Аппаратный break недоступен (типичный CH340) — НЕ уходим в slow-init:
+            // Вася при Start Baud 9600 делает именно fast-инициализацию. Используем
+            // программную имитацию break (низкоскоростные 0x00-кадры / поток нулей).
+            dbg("Аппаратный break недоступен — soft fast-init (программная имитация break), как Вася на CH340")
+            log("Init метод: soft fast-init 9600 (программный break через low-биты) — как Вася со Start Baud 9600")
+            return InitMethod.SOFT_FAST_BREAK.also { cached = it }
         }
         // Реальные 5 бод 7O1 — CP210x / FTDI принимают нативно.
         try {
@@ -80,6 +85,58 @@ object VasyaProtocol {
         }
     }
 
+    /**
+     * Программный аналог fast-init для чипов без рабочего аппаратного BREAK (CH340 в
+     * usb-serial-for-android: get/setBreak на controlIn(0x1312) падает). Трюк с «залипшим»
+     * stop-битом НЕ работает на реальном CH340: кадр остаётся в буфере TX и линия уходит в
+     * idle сразу после записи. Поэтому line-low формируется двумя способами:
+     *   A) реальные низкие скорости: baud≈250 даёт ~40 мс low на бит, 7N2 — ещё ~80 мс;
+     *   B) если драйвер не принимает <300 бод — байт 0x00 на пост-init скорости плюс
+     *      программная пауза: до возврата линии в idle держим TX-фифо полной потоком
+     *      нулевых кадров (каждый = 9 бит low), затем отпускаем и ставим 0xFF (idle).
+     * После метода всегда возвращаем порт на postInitBaud (это делает вызывающий код).
+     */
+    fun softFastBreak(port: UsbSerialPort, writeTimeoutMs: Int, postInitBaud: Int,
+                      dbgVerbose: (String) -> Unit) {
+        val targetMs = FAST_BREAK_MS
+        // Способ A: честные низкие скорости (если драйвер их принимает)
+        val lowRates = intArrayOf(250, 300, 600)
+        for (rate in lowRates) {
+            val bitMs = 1000.0 / rate
+            try {
+                port.setParameters(rate, 7, UsbSerialPort.STOPBITS_2, UsbSerialPort.PARITY_NONE)
+                val bitsNeeded = Math.ceil((targetMs - bitMs * 2) / bitMs).toInt().coerceAtLeast(1)
+                val frame = ByteArray(bitsNeeded + 1) // start+data bits of 0x00 each
+                java.util.Arrays.fill(frame, 0x00.toByte())
+                dbgVerbose("soft fast-init: %d бод 7N2, %d low-бит (~%.0f мс)".format(rate, bitsNeeded + 2, bitMs * (bitsNeeded + 2)))
+                port.write(frame, writeTimeoutMs)
+                Thread.sleep((bitMs * (bitsNeeded + 2)).toLong().coerceAtMost(targetMs + 40))
+                return
+            } catch (e: Exception) {
+                dbgVerbose("soft fast-init: %d бод недоступно (${e.javaClass.simpleName})")
+            }
+        }
+        // Способ B: поток нулевых кадров на пост-init скорости — линия прижата low, пока идёт запись
+        try {
+            port.setParameters(postInitBaud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            val bitMs = 1000.0 / postInitBaud
+            val zeros = ByteArray(64).also { java.util.Arrays.fill(it, 0x00.toByte()) }
+            val deadline = System.currentTimeMillis() + targetMs
+            var written = 0
+            while (System.currentTimeMillis() < deadline) {
+                port.write(zeros, writeTimeoutMs)
+                written += zeros.size
+            }
+            val lowMs = written * 10 * bitMs
+            dbgVerbose("soft fast-init: поток 0x00 (%d байт ≈ %.0f мс low) на %d бод".format(written, lowMs, postInitBaud))
+            // Отпустить линию: idle-байт, потом короткая пауза для восстановления K-Line
+            port.write(byteArrayOf(0xFF.toByte()), writeTimeoutMs)
+            Thread.sleep(40)
+        } catch (e: IOException) {
+            throw IOException("Не удалось выполнить soft fast-init (break через 0x00): ${e.message}", e)
+        }
+    }
+
     private var dbgQuiet: ((String) -> Unit)? = null
 
     /** Отправка импульса пробуждения выбранным методом. После неё линия должна быть в idle,
@@ -98,6 +155,10 @@ object VasyaProtocol {
                     try { port.setBreak(false) } catch (_: Exception) { }
                     throw IOException("Не удалось выполнить fast-init (break): ${e.message}", e)
                 }
+            }
+            InitMethod.SOFT_FAST_BREAK -> {
+                stage("Soft fast-init: программный break ~${FAST_BREAK_MS} мс…")
+                softFastBreak(port, writeTimeoutMs, postInitBaud, dbgVerbose)
             }
             InitMethod.FIVE_BAUD_FRAME -> {
                 try {
