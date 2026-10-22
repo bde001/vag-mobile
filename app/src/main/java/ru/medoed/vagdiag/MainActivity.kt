@@ -91,7 +91,7 @@ class MainActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(permissionReceiver, filter)
         }
-        appendLog("Vasya Diag 1.8.0-alpha started (интерфейс как VCDS/Вася)")
+        appendLog("Vasya Diag 1.9.0-alpha started (интерфейс как VCDS/Вася)")
         appendLog("Vehicle   : Golf IV 1.6 16V BCB / Interface: USB KKL CH340")
         appendLog("KW1281 only. No fabricated ECU data; validation on real vehicle required.")
         val logFile = currentLogFile
@@ -207,7 +207,9 @@ class MainActivity : Activity() {
         addrPanel.addView(addrRow, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
 
         val connRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        connectButton = winButton("Подключить") { refreshDevices() }
+        // Как в Васе: «Подключить» открывает адаптер И сразу запускает автоопределение ЭБУ,
+        // поэтому ход диагностики (Автоопределение… / slow-init / ожидание 0x55) виден сразу.
+        connectButton = winButton("Подключить") { connectNow() }
         connRow.addView(connectButton, winBtnParams())
         connRow.addView(winButton("Отключить") { disconnectAdapter() }, winBtnParams())
         connRow.addView(winButton("Настройки протокола…") { showDiagnosticSettings() }, winBtnParams())
@@ -358,7 +360,34 @@ class MainActivity : Activity() {
     private fun ensureSession(client: Kw1281Client) {
         val addr = currentAddress()
         client.connectAuto(addr, diagnosticSettings.baudRate, diagnosticSettings.startBaudRate,
+            initRetries = diagnosticSettings.initRetryTimes,
             fastInit = diagnosticSettings.fastInit, protocolMode = diagnosticSettings.protocolMode)
+    }
+
+    /**
+     * Кнопка «Подключить» как в Васе: если порт ещё не открыт — сначала refreshDevices(),
+     * затем сразу автоопределение ЭБУ с выводом каждого шага в журнал и прогресс-баром.
+     */
+    private fun connectNow() {
+        if (port == null) {
+            appendLog("Порт не открыт — ищу USB-адаптер…")
+            refreshDevices()
+            if (port == null) {
+                appendLog("Адаптер не найден. Подключи KKL в OTG и повтори.")
+                return
+            }
+        }
+        val serial = port ?: return
+        val addr = currentAddress()
+        appendLog("Подключение к ЭБУ: адрес %02X, старт %d бод (%s), пост-init %s, эхо %d мс, повторов %d".format(
+            addr, diagnosticSettings.startBaudRate,
+            if (diagnosticSettings.fastInit) "fast-init, как Вася 9600" else "slow-init",
+            if (diagnosticSettings.baudRate == 0) "авто" else "${diagnosticSettings.baudRate} бод",
+            diagnosticSettings.echoDelayMs, diagnosticSettings.initRetryTimes))
+        runDiagnostic("Подключение (адрес %02X)".format(addr)) { client ->
+            ensureSession(client)
+            client.readIdentification()
+        }
     }
 
     private fun currentAddress(): Int {
