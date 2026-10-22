@@ -14,11 +14,11 @@ import java.io.IOException
  */
 class DiagLogFileProvider : android.content.ContentProvider() {
 
-    private val mime = android.webkit.MimeTypeMap.getMimeTypeFromExtension("log") ?: "text/plain"
+    private val mime = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension("log") ?: "text/plain"
 
     override fun onCreate(): Boolean = true
 
-    override fun openFile(uri: Uri): android.os.ParcelFileDescriptor {
+    override fun openFile(uri: Uri, mode: String): android.os.ParcelFileDescriptor {
         val ctx = context ?: throw IOException("provider context is null")
         val file = resolve(ctx, uri)
         if (!file.isFile) throw FileNotFoundException("not a file: ${uri.path}")
