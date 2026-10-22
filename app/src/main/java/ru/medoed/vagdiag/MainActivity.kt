@@ -10,6 +10,7 @@ import android.content.IntentFilter
 import android.content.ClipData
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
@@ -23,6 +24,7 @@ import android.widget.TextView
 import android.widget.Toast
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
+import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -55,6 +57,13 @@ class MainActivity : Activity() {
     private val io = Executors.newSingleThreadExecutor()
     private val actionUsbPermission = "ru.medoed.vagdiag.USB_PERMISSION"
 
+    // ===== Журнал в файл (чтобы можно было отправить домой без телефона у машины) =====
+    private val fileStamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+    private val fileNameStamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
+    private var currentLogFile: File? = null
+    /** true, пока приложение активно — пишет журнал в экран AND файл; false при фоне — только файл. */
+    private var uiActive = true
+
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != actionUsbPermission) return
@@ -73,6 +82,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
         diagnosticSettings = DiagnosticSettings.load(this)
+        pruneOldLogs()
         buildUi()
         val filter = IntentFilter(actionUsbPermission)
         if (Build.VERSION.SDK_INT >= 33) {
@@ -81,10 +91,26 @@ class MainActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(permissionReceiver, filter)
         }
-        appendLog("VCDS-KW1281 1.1.0-alpha started")
+        appendLog("VCDS-KW1281 1.3.0-alpha started")
         appendLog("Vehicle   : Golf IV 1.6 16V BCB / Interface: USB KKL CH340")
         appendLog("KW1281 only. No fabricated ECU data; validation on real vehicle required.")
+        val logFile = currentLogFile
+        if (logFile != null) {
+            appendLog("Журнал пишется в файл: ${logFile.name} — «Save log» внизу отправит его целиком, даже если экран чистили или приложение закрывали.")
+        } else {
+            appendLog("ВНИМАНИЕ: журнал НЕ сохраняется в файл (нет хранилища). Кнопка «Save log» отправит то, что видно на экране.")
+        }
         refreshDevices()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        uiActive = true
+    }
+
+    override fun onPause() {
+        uiActive = false
+        super.onPause()
     }
 
     /**
@@ -258,9 +284,9 @@ class MainActivity : Activity() {
 
         // ===== Нижняя строка: действия с журналом =====
         val bottomRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        bottomRow.addView(vcdsButton("Save log", dimGreen) { shareLog() }, vcdsBtnParams())
+        bottomRow.addView(vcdsButton("Save log", dimGreen) { shareLogs() }, vcdsBtnParams())
+        bottomRow.addView(vcdsButton("Logs…", dimGreen) { openLogBrowser() }, vcdsBtnParams())
         bottomRow.addView(vcdsButton("Clear screen", dimGreen) { logView.text = "" }, vcdsBtnParams())
-        bottomRow.addView(vcdsButton("About", dimGreen) { showAbout() }, vcdsBtnParams())
         root.addView(bottomRow, LinearLayout.LayoutParams(-1, -2))
 
         setContentView(root)
@@ -695,22 +721,165 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun shareLog() {
-        val content = if (::logView.isInitialized) logView.text.toString() else "Журнал пуст"
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "VAG Diag Android — журнал диагностики")
-            putExtra(Intent.EXTRA_TEXT, content)
-            clipData = ClipData.newPlainText("VAG diagnostic log", content)
-        }
-        startActivity(Intent.createChooser(intent, "Отправить журнал диагностики"))
+    private fun appendLog(message: String) {
+        writeLogToFile(message)
+        // журнал на экран обновляем только через UI-поток (appendLog может вызываться из рабочих потоков)
+        runOnUiThread { appendLogUi(message) }
     }
 
-
-    private fun appendLog(message: String) {
-        if (!::logView.isInitialized) return
+    private fun appendLogUi(message: String) {
+        if (!uiActive || !::logView.isInitialized) return
         val stamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         logView.append("[$stamp] $message\n")
+        // автопрокрутка вниз, чтобы последние строки всегда были видны
+        try { (logView.parent as? ScrollView)?.fullScroll(View.FOCUS_DOWN) } catch (_: Exception) {}
+    }
+
+    /** Каталог internal files/logs — доступен FileProvider'у для отправки. */
+    private fun logsDir(): File? = try {
+        val dir = File(filesDir, "logs")
+        if (!dir.exists()) dir.mkdirs()
+        if (dir.isDirectory && dir.canWrite()) dir else null
+    } catch (_: Exception) { null }
+
+    /** Текущий лог-файл сессии; создаётся при первом обращении, при отказе возвращает null. */
+    private fun logFile(): File? {
+        currentLogFile?.let { if (it.isFile) return it }
+        val dir = logsDir() ?: return null
+        return try {
+            val f = File(dir, "vagdiag-${fileNameStamp.format(Date())}.log")
+            f.createNewFile()
+            currentLogFile = f
+            f
+        } catch (_: Exception) { null }
+    }
+
+    private fun writeLogToFile(message: String) {
+        val f = logFile() ?: return
+        try {
+            f.appendText("${fileStamp.format(Date())} | $message\n")
+        } catch (_: Exception) {}
+    }
+
+    /** Все файлы журналов, отсортированные по времени изменения (свежие первыми). */
+    private fun allLogFiles(): List<File> {
+        val dir = logsDir() ?: return emptyList()
+        return (dir.listFiles { file -> file.isFile && file.name.startsWith("vagdiag-") }?.toList()
+            ?: emptyList()).sortedByDescending { it.lastModified() }
+    }
+
+    /** Отправка файла журнала через FileProvider (Telegram/почта и т.п.) без бега к машине. */
+    private fun shareLogs() {
+        val files = allLogFiles()
+        if (files.isEmpty()) {
+            // fallback: то, что на экране
+            val content = if (::logView.isInitialized) logView.text.toString() else ""
+            if (content.isBlank()) { Toast.makeText(this, "Журнал пуст", Toast.LENGTH_SHORT).show(); return }
+            copyToClipboard(content)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, "VAG Diag — журнал (экран)")
+                putExtra(Intent.EXTRA_TEXT, content)
+                clipData = ClipData.newPlainText("vag-log", content)
+            }
+            startActivity(Intent.createChooser(intent, "Отправить журнал"))
+            return
+        }
+        io.execute {
+            try {
+                val newest = files.first()
+                val uri = logUri(newest)
+                val extras = ArrayList<Uri>()
+                for (f in files.drop(1).take(9)) {
+                    try { extras.add(logUri(f)) } catch (_: Exception) {}
+                }
+                val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                    type = "text/plain"
+                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(extras.apply { add(0, uri) }))
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    clipData = ClipData.newUri(contentResolver, "vag-log", uri)
+                    putExtra(Intent.EXTRA_SUBJECT, "VAG Diag — журналы (${files.size})")
+                    putExtra(Intent.EXTRA_TEXT, "Файлы логов VAG Diag Android. Всего файлов: ${files.size}, свежайший: ${newest.name}")
+                }
+                runOnUiThread {
+                    try { startActivity(Intent.createChooser(intent, "Отправить логи (можно выбрать несколько файлов)")) }
+                    catch (e: Exception) { Toast.makeText(this, "Не удалось открыть меню отправки: ${e.message}", Toast.LENGTH_LONG).show() }
+                }
+            } catch (e: Exception) {
+                runOnUiThread { Toast.makeText(this, "Ошибка подготовки файлов: ${e.message}", Toast.LENGTH_LONG).show() }
+            }
+        }
+    }
+
+    /** Диалог со списком сохранённых журналов: отправить / копировать / удалить старые. */
+    private fun openLogBrowser() {
+        val files = allLogFiles()
+        if (files.isEmpty()) { Toast.makeText(this, "Нет сохранённых журналов", Toast.LENGTH_SHORT).show(); return }
+        val labels = files.map { f ->
+            val sizeKb = (f.length() / 1024).coerceAtLeast(1)
+            "${SimpleDateFormat("dd.MM HH:mm", Locale.US).format(Date(f.lastModified()))}  ${f.name}  (${sizeKb} КБ)"
+        }.toTypedArray()
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Сохранённые журналы (${files.size})")
+            .setItems(labels) { _, idx -> showLogActions(files[idx]) }
+            .setNeutralButton("Отправить ВСЕ сразу") { _, _ -> shareLogs() }
+            .setNegativeButton("Закрыть", null)
+            .show()
+    }
+
+    private fun showLogActions(file: File) {
+        val options = arrayOf("Отправить этот файл", "Скопировать всё в буфер", "Удалить файл")
+        android.app.AlertDialog.Builder(this)
+            .setTitle(file.name)
+            .setItems(options) { dialog, which ->
+                when (which) {
+                    0 -> {
+                        try {
+                            val uri = logUri(file)
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                clipData = ClipData.newUri(contentResolver, "vag-log", uri)
+                            }
+                            startActivity(Intent.createChooser(intent, "Отправить ${file.name}"))
+                        } catch (e: Exception) { Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show() }
+                    }
+                    1 -> {
+                        val text = try { file.readText() } catch (e: Exception) { "(ошибка чтения: ${e.message})" }
+                        copyToClipboard(text)
+                        Toast.makeText(this, "Скопировано ${text.length} симв.", Toast.LENGTH_SHORT).show()
+                    }
+                    2 -> {
+                        if (file.delete()) Toast.makeText(this, "Удалён", Toast.LENGTH_SHORT).show()
+                        else Toast.makeText(this, "Не удалось удалить", Toast.LENGTH_SHORT).show()
+                        if (currentLogFile == file) currentLogFile = null
+                    }
+                }
+                dialog.dismiss()
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
+    }
+
+    private fun logUri(file: File): Uri =
+        DiagLogFileProvider.uriForFile(this, "$packageName.fileprovider", file)
+
+    private fun copyToClipboard(text: String) {
+        try {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("vag-log", text))
+        } catch (_: Exception) {}
+    }
+
+    /** Ограничивает папку logs ~15 МБ, удаляя самые старые файлы. Вызывается при старте. */
+    private fun pruneOldLogs() {
+        val files = allLogFiles() // свежие первыми
+        var total = files.sumOf { it.length() }
+        for (f in files.asReversed()) { // от старых к новым
+            if (total <= 15_000_000) break
+            try { if (f.delete()) total -= f.length() } catch (_: Exception) {}
+        }
     }
 
     private fun closePort() {

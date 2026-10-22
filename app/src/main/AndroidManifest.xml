@@ -12,5 +12,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Раздача файлов журналов для отправки (Telegram/почта) -->
+        <provider
+            android:name="ru.medoed.vagdiag.DiagLogFileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>
