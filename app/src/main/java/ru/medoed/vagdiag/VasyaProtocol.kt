@@ -212,7 +212,14 @@ object VasyaProtocol {
     fun baudCandidates(startBaud: Int, address: Int, override: Int?, forceSlowInit: Boolean = false): List<Int> {
         val first = override?.takeIf { it in setOf(4800, 9600, 10400) } ?: VasyaDefaults.preferredBaud(address)
         if (startBaud >= 1000 && !forceSlowInit) {
-            // Честный fast-init KWP2000: ответ всегда на 9600.
+            // Честный fast-init KWP2000 по стандарту ISO 9141-2: ЭБУ отвечает на синхру
+            // 0x55 строго на 9600 бод — других ставок у Васи в этом режиме нет.
+            // Но если пользователь ЯВНО выбрал скорость пост-init (override, как поле
+            // «baud» в Васе), уважаем её и даём полный перебор от неё — это спасает
+            // при нестандартных прошивках (Magneti Marelli 4MV и т.п.).
+            if (override != null && override in setOf(4800, 9600, 10400)) {
+                return listOf(override, 10400, 9600, 4800).distinct()
+            }
             return listOf(FAST_INIT_BAUD)
         }
         // Slow-init (в т.ч. принудительный для Marelli 4MV): full-перебор.

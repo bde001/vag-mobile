@@ -729,7 +729,9 @@ class MainActivity : Activity() {
                     try { kwClient?.disconnect() } catch (_: Exception) { }
                     kwClient = null
                     val client = newClient(serial, "«$label» (${index + 1}/${targets.size}):")
-                    val handshake = client.connectAuto(address, baud, diagnosticSettings.startBaudRate, fastInit = diagnosticSettings.fastInit, protocolMode = diagnosticSettings.protocolMode)
+                    val handshake = client.connectAuto(address, baud, diagnosticSettings.startBaudRate,
+                        initRetries = diagnosticSettings.initRetryTimes,
+                        fastInit = diagnosticSettings.fastInit, protocolMode = diagnosticSettings.protocolMode)
                     kwClient = client
                     val identification = try { client.readIdentification() } catch (e: Exception) { "Идентификация не прочитана: ${e.message}" }
                     found += "%02X — %s\n%s\n%s".format(address, label, identification, handshake)
