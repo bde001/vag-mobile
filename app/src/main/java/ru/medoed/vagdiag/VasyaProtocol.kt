@@ -82,11 +82,14 @@ object VasyaProtocol {
      * либо линия остаётся прижатой) fast-init недоступен.
      */
     private fun probeFastBreak(port: UsbSerialPort, log: (String) -> Unit): Boolean {
+        val idleByte = byteArrayOf(0xFF.toByte())
         return try {
             repeat(2) {
+                port.write(idleByte, 500)   // гарантируем idle перед импульсом
                 port.setBreak(true)
                 Thread.sleep(FAST_BREAK_MS)
                 port.setBreak(false)
+                port.write(idleByte, 500)   // сразу отпускаем линию байтом idle
                 Thread.sleep(30)
             }
             // Драйвер принял setBreak(true)+setBreak(false) без исключений оба цикла —
@@ -94,7 +97,7 @@ object VasyaProtocol {
             log("Init метод: fast-init 9600 (аппаратный break принят драйвером) — как Вася со Start Baud 9600")
             true
         } catch (e: Exception) {
-            try { port.setBreak(false) } catch (_: Exception) { }
+            try { port.setBreak(false); port.write(idleByte, 500) } catch (_: Exception) { }
             false
         }
     }
@@ -161,12 +164,15 @@ object VasyaProtocol {
             InitMethod.FAST_INIT_9600 -> {
                 // Fast-init: пост-init скорость уже стоит 9600; подаём break и отпускаем.
                 stage("Fast-init: break ${FAST_BREAK_MS} мс на 9600 бод…")
+                val idleByte = byteArrayOf(0xFF.toByte())
                 try {
+                    port.write(idleByte, 500) // линия в idle перед импульсом
                     port.setBreak(true)
                     Thread.sleep(FAST_BREAK_MS)
                     port.setBreak(false)
+                    port.write(idleByte, 500) // немедленно отпускаем K-Line (idle high)
                 } catch (e: Exception) {
-                    try { port.setBreak(false) } catch (_: Exception) { }
+                    try { port.setBreak(false); port.write(idleByte, 500) } catch (_: Exception) { }
                     throw IOException("Не удалось выполнить fast-init (break): ${e.message}", e)
                 }
             }

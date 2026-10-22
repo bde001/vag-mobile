@@ -87,20 +87,13 @@ class Kw1281Client(
         pendingRx.clear()
         var lastError: IOException? = null
         var sync: Int? = null
-        var attempt = 0
         val retries = initRetries.coerceIn(1, 5)
         // Как в kw1281test/Vasya Diagnost: при отсутствии синхры повторяем init с нуля —
         // часть ЭБУ просыпается только со второго импульса.
-        while (sync == null && attempt < retries) {
-            attempt++
+        for (attempt in 1..retries) {
             stage("Отправка инициализации (попытка $attempt/$retries)…")
-            if (!firstTry()) {
-                log("Нет ответа ЭБУ за ${initTimeoutMs} мс (попытка $attempt/$retries) — повторяю инициализацию…")
-                // Пауза между попытками, как в kw1281test: даём ЭБУ отпустить линию.
-                Thread.sleep(500L * attempt)
-            }
             setLineParamsQuietly(effectiveBaud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-            VasyaProtocol.sendWakeUp(port, method, address, effectiveBaud, initTimeoutMs * 2, this::stage, this::dbgVerbose)
+            VasyaProtocol.sendWakeUp(port, method, address, effectiveBaud, writeTimeoutMs = 1000, this::stage, this::dbgVerbose)
             // Возврат на пост-init скорость ДО чтения: ЭБУ шлёт синхру сразу после старта
             // именно на ней (10400/9600), читать на 5 бод смысла нет.
             setLineParamsQuietly(effectiveBaud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
@@ -109,8 +102,16 @@ class Kw1281Client(
             stage("Ожидание синхры 0x55 (до ${initTimeoutMs} мс)…")
             try {
                 sync = readByte(initTimeoutMs)
+                break
             } catch (e: IOException) {
                 lastError = e
+                if (attempt < retries) {
+                    log("Нет ответа ЭБУ за ${initTimeoutMs} мс (попытка $attempt/$retries) — отпускаю линию и повторяю инициализацию…")
+                    try { port.setBreak(false) } catch (_: Exception) { }
+                    try { port.setDTR(true) } catch (_: Exception) { }
+                    // Пауза между попытками, как в kw1281test: даём ЭБУ отпустить линию.
+                    Thread.sleep(300L * attempt)
+                }
             }
         }
         if (sync == null) {
@@ -399,10 +400,6 @@ class Kw1281Client(
             while (port.read(buf, 30) > 0) { pendingRx.addLast(buf[0].toInt() and 0xFF) }
         } catch (_: Exception) { }
     }
-
-    /** Первый прогон выбранного метода (для сообщения о повторе). */
-    private var triedOnce = false
-    private fun firstTry(): Boolean = triedOnce.also { triedOnce = true }.let { !it }
 
     private fun setLineParamsQuietly(baud: Int, dataBits: Int, stopBits: Int, parity: Int) {
         try {
