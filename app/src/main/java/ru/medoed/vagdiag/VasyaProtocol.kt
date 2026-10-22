@@ -34,10 +34,23 @@ object VasyaProtocol {
      * аппаратный break; если драйвер его не даёт — переходим к медленным путям.
      * Выбранный метод кешируется в [cached], чтобы не гонять пробы на каждой попытке.
      */
-    fun chooseMethod(port: UsbSerialPort, startBaud: Int, log: (String) -> Unit, dbg: (String) -> Unit): InitMethod {
+    fun chooseMethod(port: UsbSerialPort, startBaud: Int, log: (String) -> Unit, dbg: (String) -> Unit): InitMethod =
+        chooseMethod(port, startBaud, mode = 0, log = log, dbg = dbg)
+
+    /**
+     * [mode]: 0 = авто (каскад как раньше); 1 = принудительно slow-init (Magneti Marelli
+     * 4MV/4ME7 KW1281: адресным байтом на 5 бод); 2 = принудительно fast-init KWP2000.
+     * При forced-режиме каскад не срабатывает молча — в журнал пишется, что выбрано.
+     */
+    fun chooseMethod(port: UsbSerialPort, startBaud: Int, mode: Int, log: (String) -> Unit, dbg: (String) -> Unit): InitMethod {
         dbgQuiet = dbg
-        val wantFast = startBaud >= 1000
+        val wantFast = when (mode) {
+            1 -> false
+            2 -> true
+            else -> startBaud >= 1000
+        }
         if (wantFast) {
+            if (mode == 2) log("Принудительный fast-init (KWP2000): break ~${FAST_BREAK_MS} мс на 9600 бод")
             if (probeFastBreak(port, log)) return InitMethod.FAST_INIT_9600.also { cached = it }
             // Аппаратный break недоступен (типичный CH340) — НЕ уходим в slow-init:
             // Вася при Start Baud 9600 делает именно fast-инициализацию. Используем
@@ -49,7 +62,8 @@ object VasyaProtocol {
         // Реальные 5 бод 7O1 — CP210x / FTDI принимают нативно.
         try {
             port.setParameters(SLOW_INIT_BAUD, 7, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_ODD)
-            log("Slow-init метод: драйвер принял реальные 5 бод 7O1 (как kw1281test)")
+            if (mode == 1) log("Принудительный slow-init (KW1281, Magneti Marelli 4MV): адресный байт реальными 5 бод 7O1")
+            else log("Slow-init метод: драйвер принял реальные 5 бод 7O1 (как kw1281test)")
             return InitMethod.FIVE_BAUD_FRAME.also { cached = it }
         } catch (e: Exception) {
             dbg("5 бод недоступно (${e.javaClass.simpleName}: ${e.message}) — использую serial-break кадр")
@@ -190,12 +204,18 @@ object VasyaProtocol {
 
     /**
      * Кандидаты post-init скорости «как в Васе». При fast-init (Start Baud >= 1000)
-     * ЭБУ отвечает строго на 9600 — других вариантов нет. При slow-init приоритет по
-     * адресу блока (01/15/17/25/35/36 → 10400, остальные → 9600), затем остальные ставки.
+     * ЭБУ VW отвечает строго на 9600; но для Magneti Marelli 4MV/4ME7 (moto) оставляем
+     * полный перебор 10400/9600/4800 — эти ЭБУ после slow-init слушают 10400.
+     * При slow-init приоритет по адресу блока (01/15/17/25/35/36 → 10400, остальные → 9600),
+     * затем остальные ставки.
      */
-    fun baudCandidates(startBaud: Int, address: Int, override: Int?): List<Int> {
-        if (startBaud >= 1000) return listOf(FAST_INIT_BAUD)
+    fun baudCandidates(startBaud: Int, address: Int, override: Int?, forceSlowInit: Boolean = false): List<Int> {
         val first = override?.takeIf { it in setOf(4800, 9600, 10400) } ?: VasyaDefaults.preferredBaud(address)
+        if (startBaud >= 1000 && !forceSlowInit) {
+            // Честный fast-init KWP2000: ответ всегда на 9600.
+            return listOf(FAST_INIT_BAUD)
+        }
+        // Slow-init (в т.ч. принудительный для Marelli 4MV): full-перебор.
         return listOf(first, 10400, 9600, 4800).distinct()
     }
 }

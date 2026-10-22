@@ -43,16 +43,18 @@ class Kw1281Client(
      * Vasya work with CH340 cables that cannot produce 5-baud frames.
      */
     @Synchronized
-    fun connectAuto(address: Int = 0x01, preferredBaudRate: Int = 0, preferredStartBaud: Int = 5, initRetries: Int = initRetryTimes, fastInit: Boolean = false): String {
-        val rates = VasyaProtocol.baudCandidates(if (fastInit) 9600 else preferredStartBaud, address, preferredBaudRate.takeIf { it != 0 })
+    fun connectAuto(address: Int = 0x01, preferredBaudRate: Int = 0, preferredStartBaud: Int = 5, initRetries: Int = initRetryTimes, fastInit: Boolean = false, protocolMode: Int = 0): String {
+        val forceSlow = protocolMode == 1
+        val rates = VasyaProtocol.baudCandidates(if (fastInit && !forceSlow) 9600 else preferredStartBaud, address,
+            preferredBaudRate.takeIf { it != 0 }, forceSlowInit = forceSlow)
         val errors = mutableListOf<String>()
-        dbgVerbose("Автоопределение (как в Васе): кандидаты пост-init скоростей: ${rates.joinToString()} (${if (fastInit) "fast-init 9600" else "slow-init, Start Baud=$preferredStartBaud"})")
+        dbgVerbose("Автоопределение (как в Васе): кандидаты пост-init скоростей: ${rates.joinToString()} (${if (forceSlow) "принудительный slow-init KW1281" else if (fastInit) "fast-init 9600" else "slow-init, Start Baud=$preferredStartBaud"})")
         for (rate in rates) {
             connected = false
             log("Автоопределение ЭБУ: адрес %02X, проверка %d бод".format(address, rate))
             stage("Адрес %02X · инициализация на %d бод…".format(address, rate))
             try {
-                val result = connect(address, rate, startBaudRate = preferredStartBaud, initRetries = initRetries, fastInit = fastInit)
+                val result = connect(address, rate, startBaudRate = preferredStartBaud, initRetries = initRetries, fastInit = fastInit && !forceSlow, protocolMode = protocolMode)
                 log("Автоопределение: ответ получен на %d бод".format(rate))
                 return "Соединение установлено с адресом %02X на %d бод\n%s".format(address, rate, result)
             } catch (e: Exception) {
@@ -61,23 +63,24 @@ class Kw1281Client(
                 log("Автоопределение: %d бод — нет соединения (%s)".format(rate, reason))
             }
         }
-        throw IOException("Не удалось установить соединение с адресом %02X. Проверены скорости: %s\n".format(address, rates.joinToString()) + errors.joinToString("\n"))
+        throw IOException("Не удалось установить соединение с адресом %02X. Проверены скорости: %s\n".format(address, rates.joinToString()) + errors.joinToString("\n") + MM4MV_HINT)
     }
 
     @Synchronized
-    fun connect(address: Int = 0x01, baudRate: Int = 10400, startBaudRate: Int = 5, initRetries: Int = initRetryTimes, fastInit: Boolean = false): String {
+    fun connect(address: Int = 0x01, baudRate: Int = 10400, startBaudRate: Int = 5, initRetries: Int = initRetryTimes, fastInit: Boolean = false, protocolMode: Int = 0): String {
         connected = false
         if (address !in 0..0x7F) throw IllegalArgumentException("KW1281 address must be 0..127")
         if (baudRate !in setOf(4800, 9600, 10400)) throw IllegalArgumentException("Supported post-init baud rates: 4800, 9600, 10400")
         // Как в Васе: Start Baud 5 = slow-init, Start Baud 9600 = fast-init (break-импульс).
-        if (!fastInit && startBaudRate !in 1..5 && startBaudRate < 4800) {
+        // protocolMode=1 принудительно включает slow-init даже при Start Baud 9600 (Magneti Marelli 4MV).
+        if (protocolMode != 1 && !fastInit && startBaudRate !in 1..5 && startBaudRate < 4800) {
             throw IllegalArgumentException("Start Baud должен быть 5 (slow-init) или 9600 (fast-init), как в Васе Диагносте")
         }
-        val useFast = fastInit || startBaudRate >= 4800
+        val useFast = fastInit || (startBaudRate >= 4800 && protocolMode != 1)
         // Каскад методов инициализации (подбор «как в Васе»): fast break -> реальные 5 бод -> serial-break.
         setLineParamsQuietly(if (useFast) VasyaProtocol.FAST_INIT_BAUD else baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-        val method = VasyaProtocol.chooseMethod(port, if (useFast) 9600 else startBaudRate, { log(it) }, { dbg(it) })
-        val effectiveBaud = if (method == VasyaProtocol.InitMethod.FAST_INIT_9600 || method == VasyaProtocol.InitMethod.SOFT_FAST_BREAK) VasyaProtocol.FAST_INIT_BAUD else baudRate
+        val method = VasyaProtocol.chooseMethod(port, if (useFast) 9600 else startBaudRate, protocolMode, { log(it) }, { dbg(it) })
+        val effectiveBaud = if (method == VasyaProtocol.InitMethod.FAST_INIT_9600) VasyaProtocol.FAST_INIT_BAUD else baudRate
         if (effectiveBaud != baudRate) log("Пост-init скорость переключена на $effectiveBaud бод (метод инициализации: ${method.name})")
         dbgVerbose("Инициализация: метод=${method.name}, пост-init $effectiveBaud бод, echo=${echoDelayMs}мс, BLK=${blockDelayMs}мс, Int=${interByteDelayMs}мс, DelayCharInt=${charInterDelayMs}мс")
         pendingRx.clear()
@@ -373,5 +376,20 @@ class Kw1281Client(
         appendLine("• Зажигание выключено или ЭБУ не питается (проверь предохранитель, включи зажигание перед подключением).")
         appendLine("• Неверный адрес блока или другой протокол (KWP2000/CAN вместо KW1281).")
         appendLine("• Попробуй: Start Baud 9600 (fast-init, как в Васе когда он подключается), увеличить Init retry times до 3–5, Debug level=2 для подробного лога.")
+        append(MM4MV_HINT.trimStart())
     }.trimEnd()
+
+    companion object {
+        /** Подсказка по Magneti Marelli 4MV/4ME7 (мотоциклы MV Agusta/Facco и др.). */
+        internal const val MM4MV_HINT = """
+
+Для Magneti Marelli 4MV / 4ME7 (moto ECU):
+• Протокол — KW1281 slow-init: выбери режим «KW1281 slow-init» в настройках протокола
+  (даже если Start Baud стоит 9600 — приложение принудительно сделает медленный старт)
+  и скорость пост-init 10400 бод.
+• К Line у Marelli часто выведен только на колодку диагностики двигателя — проверь, что
+  кабель подключён именно к диагностическому разъёму ЭБУ, а не к CAN-шине.
+• Если синхра приходит, но keywords некорректны — попробуй 9600 и 4800 (приложение
+  перебирает их само в авто-режиме)."""
+    }
 }

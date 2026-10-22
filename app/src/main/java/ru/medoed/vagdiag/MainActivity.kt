@@ -307,7 +307,8 @@ class MainActivity : Activity() {
     /** Подключение по текущему адресу из поля Adresse (если сеанса ещё нет). */
     private fun ensureSession(client: Kw1281Client) {
         val addr = currentAddress()
-        client.connectAuto(addr, diagnosticSettings.baudRate, diagnosticSettings.startBaudRate, fastInit = diagnosticSettings.fastInit)
+        client.connectAuto(addr, diagnosticSettings.baudRate, diagnosticSettings.startBaudRate,
+            fastInit = diagnosticSettings.fastInit, protocolMode = diagnosticSettings.protocolMode)
     }
 
     private fun currentAddress(): Int {
@@ -384,6 +385,14 @@ class MainActivity : Activity() {
         }
         val address = field("Адрес ЭБУ (двигатель обычно 01)", current.ecuAddress)
         // Vasya Diagnost-style advanced options (labels mirror his "Protocol settings" dialog).
+        // Режим протокола — как галки KWP-1281/KWP-2000 у Васи; нужен для Magneti Marelli 4MV.
+        val protoMode = dropdownField(fields, "Режим протокола (галки KWP у Васи)",
+            listOf(
+                "Авто (подбирается по Start Baud)" to 0,
+                "KW1281 slow-init (Magneti Marelli 4MV/4ME7, moto)" to 1,
+                "KWP2000 fast-init (VAG, break на 9600)" to 2
+            ),
+            current.protocolMode)
         // Start Baud — как два варианта у Васи: 5 = slow-init, 9600 = fast-init.
         val startBaud = dropdownField(fields, "Start Baud — режим инициализации (как в Васе)",
             listOf("5 — slow-init (классический KW1281)" to 5, "9600 — fast-init (рекомендуется для CH340)" to 9600),
@@ -424,6 +433,7 @@ class MainActivity : Activity() {
                 dialog.setOnShowListener {
                     dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                         val a = address.text.toString().toIntOrNull()
+                        val pm = protoMode()
                         val sb = startBaud()
                         val b = baud()
                         val r = response.text.toString().toIntOrNull()
@@ -454,8 +464,9 @@ class MainActivity : Activity() {
                             startBaudRate = sb, echoDelayMs = echo!!, blockDelayMs = blk!!,
                             interByteDelayMs = inter!!, charInterDelayMs = charInt!!,
                             debugLevel = dbgLvl, initRetryTimes = rt!!,
-                            protocolMode = if (sb >= 1000) 2 else 1
+                            protocolMode = pm
                         )
+                        VasyaProtocol.resetCache()
                         diagnosticSettings.save(this)
                         if (::addressField.isInitialized) addressField.setText("%02X".format(a!!))
                         kwClient = null
@@ -685,7 +696,7 @@ class MainActivity : Activity() {
                     try { kwClient?.disconnect() } catch (_: Exception) { }
                     kwClient = null
                     val client = newClient(serial, "«$label» (${index + 1}/${targets.size}):")
-                    val handshake = client.connectAuto(address, baud, diagnosticSettings.startBaudRate, fastInit = diagnosticSettings.fastInit)
+                    val handshake = client.connectAuto(address, baud, diagnosticSettings.startBaudRate, fastInit = diagnosticSettings.fastInit, protocolMode = diagnosticSettings.protocolMode)
                     kwClient = client
                     val identification = try { client.readIdentification() } catch (e: Exception) { "Идентификация не прочитана: ${e.message}" }
                     found += "%02X — %s\n%s\n%s".format(address, label, identification, handshake)
