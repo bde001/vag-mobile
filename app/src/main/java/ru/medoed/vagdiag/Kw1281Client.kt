@@ -224,7 +224,7 @@ class Kw1281Client(
             i += 3
             val commentStart = i
             while (i < f2.size && (f2[i].toInt() and 0xFF) in 0x20..0x7E) i++
-            if (i > commentStart) sb.append(" · ").append(f2.copyOfRange(commentStart, i).map { (it.toInt() and 0xFF).toChar() }.joinToString(""))
+            if (i > commentStart) sb.append(" · ").append(f2.slice(commentStart until i).map { (it.toInt() and 0xFF).toChar() }.joinToString(""))
             sb.append('\n')
             if (i < f2.size && (f2[i].toInt() and 0xFF) == 0x00) i++ // разделитель записей
         }

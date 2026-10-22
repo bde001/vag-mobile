@@ -1,337 +1,354 @@
-﻿2026-10-21T18:09:33.7699833Z Current runner version: '2.338.0'
-2026-10-21T18:09:33.7724883Z ##[group]Runner Image Provisioner
-2026-10-21T18:09:33.7725809Z Hosted Compute Agent
-2026-10-21T18:09:33.7726432Z Version: 20261012.601
-2026-10-21T18:09:33.7727612Z Commit: f3dc54e1fb89da6852db922499a0233137369e1d
-2026-10-21T18:09:33.7728363Z Build Date: 2026-10-12T17:48:21Z
-2026-10-21T18:09:33.7729015Z Worker ID: {eaf7a9ac-877c-462f-8b35-88f06601f578}
-2026-10-21T18:09:33.7729767Z Region: northcentralus
-2026-10-21T18:09:33.7730371Z Cloud: Azure
-2026-10-21T18:09:33.7730888Z ##[endgroup]
-2026-10-21T18:09:33.7732308Z ##[group]Operating System
-2026-10-21T18:09:33.7732962Z Ubuntu
-2026-10-21T18:09:33.7733462Z 24.04.5
-2026-10-21T18:09:33.7734021Z LTS
-2026-10-21T18:09:33.7734518Z ##[endgroup]
-2026-10-21T18:09:33.7735042Z ##[group]Runner Image
-2026-10-21T18:09:33.7735637Z Image: ubuntu-24.04
-2026-10-21T18:09:33.7736196Z Version: 20261012.334.1
-2026-10-21T18:09:33.7737761Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261012.334/images/ubuntu/Ubuntu2404-Readme.md
-2026-10-21T18:09:33.7739307Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261012.334
-2026-10-21T18:09:33.7740235Z ##[endgroup]
-2026-10-21T18:09:33.7741338Z ##[group]GITHUB_TOKEN Permissions
-2026-10-21T18:09:33.7743751Z Contents: read
-2026-10-21T18:09:33.7744281Z Metadata: read
-2026-10-21T18:09:33.7745196Z ##[endgroup]
-2026-10-21T18:09:33.7747648Z Secret source: Actions
-2026-10-21T18:09:33.7748571Z Cache mode: write
-2026-10-21T18:09:33.7749500Z Prepare workflow directory
-2026-10-21T18:09:33.8074768Z Prepare all required actions
-2026-10-21T18:09:33.8125170Z Getting action download info
-2026-10-21T18:09:34.0685485Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
-2026-10-21T18:09:34.2202438Z Download action repository 'actions/setup-java@v4' (SHA:cf277c60eb25467037889841efdb72551f06f6c3)
-2026-10-21T18:09:34.9320201Z Download action repository 'gradle/actions@v4' (SHA:ed408507eac070d1f99cc633dbcf757c94c7933a)
-2026-10-21T18:09:36.2217939Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
-2026-10-21T18:09:36.4954404Z Complete job name: build
-2026-10-21T18:09:36.5640037Z ##[group]Run actions/checkout@v4
-2026-10-21T18:09:36.5640678Z with:
-2026-10-21T18:09:36.5641143Z   repository: bde001/vag-mobile
-2026-10-21T18:09:36.5643717Z   token: ***
-2026-10-21T18:09:36.5644063Z   ssh-strict: true
-2026-10-21T18:09:36.5644456Z   ssh-user: git
-2026-10-21T18:09:36.5644827Z   persist-credentials: true
-2026-10-21T18:09:36.5645215Z   clean: true
-2026-10-21T18:09:36.5645660Z   sparse-checkout-cone-mode: true
-2026-10-21T18:09:36.5646036Z   fetch-depth: 1
-2026-10-21T18:09:36.5646535Z   fetch-tags: false
-2026-10-21T18:09:36.5647175Z   show-progress: true
-2026-10-21T18:09:36.5647554Z   lfs: false
-2026-10-21T18:09:36.5647923Z   submodules: false
-2026-10-21T18:09:36.5648293Z   set-safe-directory: true
-2026-10-21T18:09:36.5648712Z   allow-unsafe-pr-checkout: false
-2026-10-21T18:09:36.5649313Z ##[endgroup]
-2026-10-21T18:09:36.6654283Z Syncing repository: bde001/vag-mobile
-2026-10-21T18:09:36.6656003Z ##[group]Getting Git version info
-2026-10-21T18:09:36.6656948Z Working directory is '/home/runner/work/vag-mobile/vag-mobile'
-2026-10-21T18:09:36.6688270Z [command]/usr/bin/git version
-2026-10-21T18:09:36.6796974Z git version 2.55.0
-2026-10-21T18:09:36.6829922Z ##[endgroup]
-2026-10-21T18:09:36.6845133Z Temporarily overriding HOME='/home/runner/work/_temp/f7dff09e-b490-4fd1-a722-90466d712fe9' before making global git config changes
-2026-10-21T18:09:36.6846998Z Adding repository directory to the temporary git global config as a safe directory
-2026-10-21T18:09:36.6851053Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/vag-mobile/vag-mobile
-2026-10-21T18:09:36.6902174Z Deleting the contents of '/home/runner/work/vag-mobile/vag-mobile'
-2026-10-21T18:09:36.6908324Z ##[group]Initializing the repository
-2026-10-21T18:09:36.6913294Z [command]/usr/bin/git init /home/runner/work/vag-mobile/vag-mobile
-2026-10-21T18:09:36.7004503Z hint: Using 'master' as the name for the initial branch. This default branch name
-2026-10-21T18:09:36.7006074Z hint: will change to "main" in Git 3.0. To configure the initial branch name
-2026-10-21T18:09:36.7007468Z hint: to use in all of your new repositories, which will suppress this warning,
-2026-10-21T18:09:36.7009894Z hint: call:
-2026-10-21T18:09:36.7011170Z hint:
-2026-10-21T18:09:36.7012106Z hint: 	git config --global init.defaultBranch <name>
-2026-10-21T18:09:36.7013037Z hint:
-2026-10-21T18:09:36.7013907Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
-2026-10-21T18:09:36.7014888Z hint: 'development'. The just-created branch can be renamed via this command:
-2026-10-21T18:09:36.7016933Z hint:
-2026-10-21T18:09:36.7017637Z hint: 	git branch -m <name>
-2026-10-21T18:09:36.7018267Z hint:
-2026-10-21T18:09:36.7019034Z hint: Disable this message with "git config set advice.defaultBranchName false"
-2026-10-21T18:09:36.7020117Z Initialized empty Git repository in /home/runner/work/vag-mobile/vag-mobile/.git/
-2026-10-21T18:09:36.7022188Z [command]/usr/bin/git remote add origin https://github.com/bde001/vag-mobile
-2026-10-21T18:09:36.7066526Z ##[endgroup]
-2026-10-21T18:09:36.7067784Z ##[group]Disabling automatic garbage collection
-2026-10-21T18:09:36.7071256Z [command]/usr/bin/git config --local gc.auto 0
-2026-10-21T18:09:36.7103966Z ##[endgroup]
-2026-10-21T18:09:36.7104989Z ##[group]Setting up auth
-2026-10-21T18:09:36.7112977Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-2026-10-21T18:09:36.7145322Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-2026-10-21T18:09:36.7512323Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
-2026-10-21T18:09:36.7544840Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
-2026-10-21T18:09:36.7748134Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
-2026-10-21T18:09:36.7781992Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
-2026-10-21T18:09:36.7993626Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
-2026-10-21T18:09:36.8040960Z ##[endgroup]
-2026-10-21T18:09:36.8041903Z ##[group]Fetching the repository
-2026-10-21T18:09:36.8052024Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +97c2c7d9fd7f3b43c0acb30dd39bed296cdec1ba:refs/remotes/origin/main
-2026-10-21T18:09:37.1097715Z From https://github.com/bde001/vag-mobile
-2026-10-21T18:09:37.1098426Z  * [new ref]         97c2c7d9fd7f3b43c0acb30dd39bed296cdec1ba -> origin/main
-2026-10-21T18:09:37.1101389Z ##[endgroup]
-2026-10-21T18:09:37.1102213Z ##[group]Determining the checkout info
-2026-10-21T18:09:37.1104128Z ##[endgroup]
-2026-10-21T18:09:37.1110552Z [command]/usr/bin/git sparse-checkout disable
-2026-10-21T18:09:37.1163039Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
-2026-10-21T18:09:37.1194677Z ##[group]Checking out the ref
-2026-10-21T18:09:37.1198920Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
-2026-10-21T18:09:37.1265717Z Switched to a new branch 'main'
-2026-10-21T18:09:37.1270241Z branch 'main' set up to track 'origin/main'.
-2026-10-21T18:09:37.1276010Z ##[endgroup]
-2026-10-21T18:09:37.1314749Z [command]/usr/bin/git log -1 --format=%H
-2026-10-21T18:09:37.1336985Z 97c2c7d9fd7f3b43c0acb30dd39bed296cdec1ba
-2026-10-21T18:09:37.1613423Z ##[group]Run actions/setup-java@v4
-2026-10-21T18:09:37.1613798Z with:
-2026-10-21T18:09:37.1614117Z   distribution: temurin
-2026-10-21T18:09:37.1614562Z   java-version: 17
-2026-10-21T18:09:37.1614854Z   java-package: jdk
-2026-10-21T18:09:37.1615131Z   check-latest: false
-2026-10-21T18:09:37.1615402Z   server-id: github
-2026-10-21T18:09:37.1615677Z   server-username: GITHUB_ACTOR
-2026-10-21T18:09:37.1615990Z   server-password: GITHUB_TOKEN
-2026-10-21T18:09:37.1616291Z   overwrite-settings: true
-2026-10-21T18:09:37.1616575Z   job-status: success
-2026-10-21T18:09:37.1619115Z   token: ***
-2026-10-21T18:09:37.1619382Z ##[endgroup]
-2026-10-21T18:09:37.3407361Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
-2026-10-21T18:09:37.3417370Z ##[group]Installed distributions
-2026-10-21T18:09:37.3450536Z Resolved Java 17.0.20+1 from tool-cache
-2026-10-21T18:09:37.3450939Z Setting Java 17.0.20+1 as the default
-2026-10-21T18:09:37.3459701Z (node:2359) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
-2026-10-21T18:09:37.3460428Z (Use `node --trace-deprecation ...` to show where the warning was created)
-2026-10-21T18:09:37.3462896Z Creating toolchains.xml for JDK version 17 from temurin
-2026-10-21T18:09:37.3532849Z Writing to /home/runner/.m2/toolchains.xml
-2026-10-21T18:09:37.3533827Z 
-2026-10-21T18:09:37.3534283Z Java configuration:
-2026-10-21T18:09:37.3534769Z   Distribution: temurin
-2026-10-21T18:09:37.3535214Z   Version: 17.0.20+1
-2026-10-21T18:09:37.3535775Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
-2026-10-21T18:09:37.3536275Z 
-2026-10-21T18:09:37.3537087Z ##[endgroup]
-2026-10-21T18:09:37.3585057Z Creating settings.xml with server-id: github
-2026-10-21T18:09:37.3585726Z Writing to /home/runner/.m2/settings.xml
-2026-10-21T18:09:37.3928626Z ##[group]Run gradle/actions/setup-gradle@v4
-2026-10-21T18:09:37.3929139Z with:
-2026-10-21T18:09:37.3929417Z   gradle-version: 8.9
-2026-10-21T18:09:37.3929734Z   cache-disabled: false
-2026-10-21T18:09:37.3930065Z   cache-read-only: false
-2026-10-21T18:09:37.3930310Z   cache-write-only: false
-2026-10-21T18:09:37.3930587Z   cache-overwrite-existing: false
-2026-10-21T18:09:37.3931023Z   cache-cleanup: on-success
-2026-10-21T18:09:37.3931362Z   gradle-home-cache-includes: caches
+﻿2026-10-22T12:27:41.2883879Z Current runner version: '2.338.0'
+2026-10-22T12:27:41.2909038Z ##[group]Runner Image Provisioner
+2026-10-22T12:27:41.2909998Z Hosted Compute Agent
+2026-10-22T12:27:41.2910579Z Version: 20261012.601
+2026-10-22T12:27:41.2911182Z Commit: f3dc54e1fb89da6852db922499a0233137369e1d
+2026-10-22T12:27:41.2912006Z Build Date: 2026-10-12T17:48:21Z
+2026-10-22T12:27:41.2912673Z Worker ID: {38f0c97f-cd78-4125-8357-83146ad03e96}
+2026-10-22T12:27:41.2913452Z Region: westus2
+2026-10-22T12:27:41.2913998Z Cloud: Azure
+2026-10-22T12:27:41.2914515Z ##[endgroup]
+2026-10-22T12:27:41.2916085Z ##[group]Operating System
+2026-10-22T12:27:41.2916719Z Ubuntu
+2026-10-22T12:27:41.2917291Z 24.04.5
+2026-10-22T12:27:41.2917814Z LTS
+2026-10-22T12:27:41.2918315Z ##[endgroup]
+2026-10-22T12:27:41.2919254Z ##[group]Runner Image
+2026-10-22T12:27:41.2919860Z Image: ubuntu-24.04
+2026-10-22T12:27:41.2920484Z Version: 20261012.334.1
+2026-10-22T12:27:41.2921768Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261012.334/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-22T12:27:41.2923398Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261012.334
+2026-10-22T12:27:41.2924403Z ##[endgroup]
+2026-10-22T12:27:41.2925516Z ##[group]GITHUB_TOKEN Permissions
+2026-10-22T12:27:41.2927625Z Contents: read
+2026-10-22T12:27:41.2928856Z Metadata: read
+2026-10-22T12:27:41.2929554Z ##[endgroup]
+2026-10-22T12:27:41.2931605Z Secret source: Actions
+2026-10-22T12:27:41.2932622Z Cache mode: write
+2026-10-22T12:27:41.2933295Z Prepare workflow directory
+2026-10-22T12:27:41.3315061Z Prepare all required actions
+2026-10-22T12:27:41.3377910Z Getting action download info
+2026-10-22T12:27:41.6914000Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-22T12:27:41.7969884Z Download action repository 'actions/setup-java@v4' (SHA:cf277c60eb25467037889841efdb72551f06f6c3)
+2026-10-22T12:27:42.0975301Z Download action repository 'gradle/actions@v4' (SHA:ed408507eac070d1f99cc633dbcf757c94c7933a)
+2026-10-22T12:27:42.8825232Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-22T12:27:43.1082862Z Complete job name: build
+2026-10-22T12:27:43.1874274Z ##[group]Run actions/checkout@v4
+2026-10-22T12:27:43.1875225Z with:
+2026-10-22T12:27:43.1875705Z   repository: bde001/vag-mobile
+2026-10-22T12:27:43.1880161Z   token: ***
+2026-10-22T12:27:43.1880640Z   ssh-strict: true
+2026-10-22T12:27:43.1881113Z   ssh-user: git
+2026-10-22T12:27:43.1881598Z   persist-credentials: true
+2026-10-22T12:27:43.1882127Z   clean: true
+2026-10-22T12:27:43.1882607Z   sparse-checkout-cone-mode: true
+2026-10-22T12:27:43.1883174Z   fetch-depth: 1
+2026-10-22T12:27:43.1883637Z   fetch-tags: false
+2026-10-22T12:27:43.1884114Z   show-progress: true
+2026-10-22T12:27:43.1884596Z   lfs: false
+2026-10-22T12:27:43.1885043Z   submodules: false
+2026-10-22T12:27:43.1885533Z   set-safe-directory: true
+2026-10-22T12:27:43.1886067Z   allow-unsafe-pr-checkout: false
+2026-10-22T12:27:43.1886974Z ##[endgroup]
+2026-10-22T12:27:43.2974148Z Syncing repository: bde001/vag-mobile
+2026-10-22T12:27:43.2976940Z ##[group]Getting Git version info
+2026-10-22T12:27:43.2978351Z Working directory is '/home/runner/work/vag-mobile/vag-mobile'
+2026-10-22T12:27:43.2980542Z [command]/usr/bin/git version
+2026-10-22T12:27:43.3059990Z git version 2.55.0
+2026-10-22T12:27:43.3082514Z ##[endgroup]
+2026-10-22T12:27:43.3099843Z Temporarily overriding HOME='/home/runner/work/_temp/333915ab-2be6-4ac0-8a7a-eaa756fa9aa6' before making global git config changes
+2026-10-22T12:27:43.3103525Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-22T12:27:43.3106566Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/vag-mobile/vag-mobile
+2026-10-22T12:27:43.3158299Z Deleting the contents of '/home/runner/work/vag-mobile/vag-mobile'
+2026-10-22T12:27:43.3163168Z ##[group]Initializing the repository
+2026-10-22T12:27:43.3167421Z [command]/usr/bin/git init /home/runner/work/vag-mobile/vag-mobile
+2026-10-22T12:27:43.3304117Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-22T12:27:43.3306899Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-22T12:27:43.3309466Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-22T12:27:43.3311270Z hint: call:
+2026-10-22T12:27:43.3312579Z hint:
+2026-10-22T12:27:43.3313762Z hint: 	git config --global init.defaultBranch <name>
+2026-10-22T12:27:43.3315469Z hint:
+2026-10-22T12:27:43.3317118Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-22T12:27:43.3319580Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-22T12:27:43.3321272Z hint:
+2026-10-22T12:27:43.3322229Z hint: 	git branch -m <name>
+2026-10-22T12:27:43.3323279Z hint:
+2026-10-22T12:27:43.3324716Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-22T12:27:43.3326497Z Initialized empty Git repository in /home/runner/work/vag-mobile/vag-mobile/.git/
+2026-10-22T12:27:43.3330275Z [command]/usr/bin/git remote add origin https://github.com/bde001/vag-mobile
+2026-10-22T12:27:43.3375761Z ##[endgroup]
+2026-10-22T12:27:43.3377563Z ##[group]Disabling automatic garbage collection
+2026-10-22T12:27:43.3379702Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-22T12:27:43.3416561Z ##[endgroup]
+2026-10-22T12:27:43.3418220Z ##[group]Setting up auth
+2026-10-22T12:27:43.3434207Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-22T12:27:43.3467893Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-22T12:27:43.3831225Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-22T12:27:43.3874411Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-22T12:27:43.4152080Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-22T12:27:43.4200835Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-22T12:27:43.4453930Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-22T12:27:43.4498118Z ##[endgroup]
+2026-10-22T12:27:43.4500802Z ##[group]Fetching the repository
+2026-10-22T12:27:43.4509947Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +233fa550c9c54d663b7bb0ec5bf13737c1fe254d:refs/remotes/origin/main
+2026-10-22T12:27:43.7199632Z From https://github.com/bde001/vag-mobile
+2026-10-22T12:27:43.7200913Z  * [new ref]         233fa550c9c54d663b7bb0ec5bf13737c1fe254d -> origin/main
+2026-10-22T12:27:43.7204546Z ##[endgroup]
+2026-10-22T12:27:43.7205472Z ##[group]Determining the checkout info
+2026-10-22T12:27:43.7207262Z ##[endgroup]
+2026-10-22T12:27:43.7213567Z [command]/usr/bin/git sparse-checkout disable
+2026-10-22T12:27:43.7266307Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-22T12:27:43.7298048Z ##[group]Checking out the ref
+2026-10-22T12:27:43.7302208Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-10-22T12:27:43.7383005Z Switched to a new branch 'main'
+2026-10-22T12:27:43.7388802Z branch 'main' set up to track 'origin/main'.
+2026-10-22T12:27:43.7394872Z ##[endgroup]
+2026-10-22T12:27:43.7437107Z [command]/usr/bin/git log -1 --format=%H
+2026-10-22T12:27:43.7464555Z 233fa550c9c54d663b7bb0ec5bf13737c1fe254d
+2026-10-22T12:27:43.7789337Z ##[group]Run actions/setup-java@v4
+2026-10-22T12:27:43.7789991Z with:
+2026-10-22T12:27:43.7790435Z   distribution: temurin
+2026-10-22T12:27:43.7790938Z   java-version: 17
+2026-10-22T12:27:43.7791633Z   java-package: jdk
+2026-10-22T12:27:43.7792106Z   check-latest: false
+2026-10-22T12:27:43.7792587Z   server-id: github
+2026-10-22T12:27:43.7793085Z   server-username: GITHUB_ACTOR
+2026-10-22T12:27:43.7793650Z   server-password: GITHUB_TOKEN
+2026-10-22T12:27:43.7794208Z   overwrite-settings: true
+2026-10-22T12:27:43.7794739Z   job-status: success
+2026-10-22T12:27:43.7799035Z   token: ***
+2026-10-22T12:27:43.7799506Z ##[endgroup]
+2026-10-22T12:27:43.9473645Z ##[warning]setup-java v4 is deprecated and will no longer receive updates. Please migrate to actions/setup-java@v5.
+2026-10-22T12:27:43.9482211Z ##[group]Installed distributions
+2026-10-22T12:27:43.9515571Z Resolved Java 17.0.20+1 from tool-cache
+2026-10-22T12:27:43.9516887Z Setting Java 17.0.20+1 as the default
+2026-10-22T12:27:43.9527981Z (node:2543) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-22T12:27:43.9529615Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-22T12:27:43.9531074Z Creating toolchains.xml for JDK version 17 from temurin
+2026-10-22T12:27:43.9609662Z Writing to /home/runner/.m2/toolchains.xml
+2026-10-22T12:27:43.9610758Z 
+2026-10-22T12:27:43.9611235Z Java configuration:
+2026-10-22T12:27:43.9611905Z   Distribution: temurin
+2026-10-22T12:27:43.9612550Z   Version: 17.0.20+1
+2026-10-22T12:27:43.9613460Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-22T12:27:43.9614347Z 
+2026-10-22T12:27:43.9615081Z ##[endgroup]
+2026-10-22T12:27:43.9632687Z Creating settings.xml with server-id: github
+2026-10-22T12:27:43.9659039Z Writing to /home/runner/.m2/settings.xml
+2026-10-22T12:27:44.0097740Z ##[group]Run gradle/actions/setup-gradle@v4
+2026-10-22T12:27:44.0098763Z with:
+2026-10-22T12:27:44.0099234Z   gradle-version: 8.9
+2026-10-22T12:27:44.0099730Z   cache-disabled: false
+2026-10-22T12:27:44.0100236Z   cache-read-only: false
+2026-10-22T12:27:44.0100745Z   cache-write-only: false
+2026-10-22T12:27:44.0101302Z   cache-overwrite-existing: false
+2026-10-22T12:27:44.0101872Z   cache-cleanup: on-success
+2026-10-22T12:27:44.0102480Z   gradle-home-cache-includes: caches
 notifications
 
-2026-10-21T18:09:37.3931705Z   add-job-summary: always
-2026-10-21T18:09:37.3931998Z   add-job-summary-as-pr-comment: never
-2026-10-21T18:09:37.3932498Z   dependency-graph: disabled
-2026-10-21T18:09:37.3932823Z   dependency-graph-report-dir: dependency-graph-reports
-2026-10-21T18:09:37.3933208Z   dependency-graph-continue-on-failure: true
-2026-10-21T18:09:37.3933525Z   build-scan-publish: false
-2026-10-21T18:09:37.3933782Z   validate-wrappers: true
-2026-10-21T18:09:37.3934096Z   allow-snapshot-wrappers: false
-2026-10-21T18:09:37.3934449Z   gradle-home-cache-strict-match: false
-2026-10-21T18:09:37.3934819Z   workflow-job-context: null
-2026-10-21T18:09:37.3937242Z   github-token: ***
-2026-10-21T18:09:37.3937464Z env:
-2026-10-21T18:09:37.3937763Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
-2026-10-21T18:09:37.3938329Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
-2026-10-21T18:09:37.3938835Z ##[endgroup]
-2026-10-21T18:09:37.8245608Z Merged default JDK locations into /home/runner/.m2/toolchains.xml
-2026-10-21T18:09:37.8247227Z Preparing cache for cleanup.
-2026-10-21T18:09:37.8250494Z ##[group]Restore Gradle state from cache
-2026-10-21T18:09:37.9699604Z Cache hit for restore-key: gradle-home-v1|Linux-X64|build[e080f0fdc288b6f0c5023fd4b86f7a10]-e6709ccfed2972aaef3a071f16acff732375964c
-2026-10-21T18:09:38.4127867Z Received 378258 of 378258 (100.0%), 1.1 MBs/sec
-2026-10-21T18:09:38.4129145Z Cache Size: ~0 MB (378258 B)
-2026-10-21T18:09:38.4157323Z [command]/usr/bin/tar -xf /home/runner/work/_temp/02e03e5b-bc75-4526-b4ac-d50d3197cb17/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
-2026-10-21T18:09:38.4460545Z Cache restored successfully
-2026-10-21T18:09:38.4465597Z Restored cache entry with key gradle-home-v1|Linux-X64|build[e080f0fdc288b6f0c5023fd4b86f7a10]-97c2c7d9fd7f3b43c0acb30dd39bed296cdec1ba to /home/runner/.gradle/caches,/home/runner/.gradle/notifications,/home/runner/.gradle/.setup-gradle in 620ms
-2026-10-21T18:09:38.5573627Z Cache hit for: gradle-dependencies-v1-03c56354b75e751cbaf47d570dd8b19c
-2026-10-21T18:09:38.5606456Z Cache hit for: gradle-transforms-v1-86192a47c065a3df9eecd83071ceccb7
-2026-10-21T18:09:38.5699999Z Cache hit for: gradle-kotlin-dsl-v1-a42c1aebf92399dba97da2ceb6fa6104
-2026-10-21T18:09:38.5707137Z Cache hit for: gradle-groovy-dsl-v1-e5e6f7ae97be6dd66fa3be68fd61b21a
-2026-10-21T18:09:38.5752668Z Cache hit for: gradle-instrumented-jars-v1-2034244150abb35de5480b1aa4877ce3
-2026-10-21T18:09:38.6021748Z Cache hit for: gradle-generated-gradle-jars-v1-26cfecc158c44513d188405a5d2d0d9c
-2026-10-21T18:09:38.7301977Z Received 143519 of 143519 (100.0%), 1.1 MBs/sec
-2026-10-21T18:09:38.7303426Z Cache Size: ~0 MB (143519 B)
-2026-10-21T18:09:38.7398078Z [command]/usr/bin/tar -xf /home/runner/work/_temp/3ce6dde5-2a6b-4975-a8a3-4590b783f7d7/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
-2026-10-21T18:09:38.7586453Z Cache restored successfully
-2026-10-21T18:09:38.7588022Z Restored cache entry with key gradle-groovy-dsl-v1-e5e6f7ae97be6dd66fa3be68fd61b21a to /home/runner/.gradle/caches/*/groovy-dsl/*/ in 311ms
-2026-10-21T18:09:38.8795585Z Received 90381 of 90381 (100.0%), 0.4 MBs/sec
-2026-10-21T18:09:38.8796263Z Cache Size: ~0 MB (90381 B)
-2026-10-21T18:09:38.8824535Z [command]/usr/bin/tar -xf /home/runner/work/_temp/e8967862-3b49-471d-9f3d-4255b81a0b66/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
-2026-10-21T18:09:38.8919513Z Cache restored successfully
-2026-10-21T18:09:38.8920949Z Restored cache entry with key gradle-instrumented-jars-v1-2034244150abb35de5480b1aa4877ce3 to /home/runner/.gradle/caches/jars-*/*/ in 444ms
-2026-10-21T18:09:38.9293038Z Received 118140 of 118140 (100.0%), 0.5 MBs/sec
-2026-10-21T18:09:38.9293818Z Cache Size: ~0 MB (118140 B)
-2026-10-21T18:09:38.9340550Z [command]/usr/bin/tar -xf /home/runner/work/_temp/43e312cb-402f-44d6-832f-5c50200dfbca/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
-2026-10-21T18:09:38.9689570Z Cache restored successfully
-2026-10-21T18:09:38.9695344Z Restored cache entry with key gradle-kotlin-dsl-v1-a42c1aebf92399dba97da2ceb6fa6104 to /home/runner/.gradle/caches/*/kotlin-dsl/accessors/*/,/home/runner/.gradle/caches/*/kotlin-dsl/scripts/*/ in 522ms
-2026-10-21T18:09:39.4057555Z Received 39619896 of 39619896 (100.0%), 55.2 MBs/sec
-2026-10-21T18:09:39.4058056Z Cache Size: ~38 MB (39619896 B)
-2026-10-21T18:09:39.4140579Z [command]/usr/bin/tar -xf /home/runner/work/_temp/0138abca-b853-4c64-971c-daa93d9c3cf4/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
-2026-10-21T18:09:39.7066162Z Received 99481184 of 99481184 (100.0%), 93.1 MBs/sec
-2026-10-21T18:09:39.7067113Z Cache Size: ~95 MB (99481184 B)
-2026-10-21T18:09:39.7178185Z Cache restored successfully
-2026-10-21T18:09:39.7181374Z Received 71303168 of 168186958 (42.4%), 67.5 MBs/sec
-2026-10-21T18:09:39.7198190Z Restored cache entry with key gradle-generated-gradle-jars-v1-26cfecc158c44513d188405a5d2d0d9c to /home/runner/.gradle/caches/8.9/generated-gradle-jars/gradle-api-8.9.jar in 1272ms
-2026-10-21T18:09:39.7212422Z [command]/usr/bin/tar -xf /home/runner/work/_temp/902a23a4-d496-4e98-96f0-fc4a2b1501ee/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
-2026-10-21T18:09:40.2406773Z Received 168186958 of 168186958 (100.0%), 104.9 MBs/sec
-2026-10-21T18:09:40.2408387Z Cache Size: ~160 MB (168186958 B)
-2026-10-21T18:09:40.2514817Z [command]/usr/bin/tar -xf /home/runner/work/_temp/7b44deb7-b512-40b6-a988-4552545c9da9/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
-2026-10-21T18:09:40.4473702Z Cache restored successfully
-2026-10-21T18:09:40.4529140Z Restored cache entry with key gradle-transforms-v1-86192a47c065a3df9eecd83071ceccb7 to /home/runner/.gradle/caches/transforms-4/*/,/home/runner/.gradle/caches/*/transforms/*/ in 2003ms
-2026-10-21T18:09:40.4775809Z Cache restored successfully
-2026-10-21T18:09:40.4839036Z Restored cache entry with key gradle-dependencies-v1-03c56354b75e751cbaf47d570dd8b19c to /home/runner/.gradle/caches/modules-*/files-*/*/*/*/* in 2036ms
-2026-10-21T18:09:40.4908639Z ##[endgroup]
-2026-10-21T18:09:40.4983002Z ##[group]All Gradle Wrapper jars are valid
-2026-10-21T18:09:40.4983763Z 
-2026-10-21T18:09:40.4984119Z ##[endgroup]
-2026-10-21T18:09:40.5658571Z ##[group]Provision Gradle 8.9
-2026-10-21T18:09:44.1221053Z Cache hit for: gradle-8.9
-2026-10-21T18:09:45.2520854Z Received 134217728 of 135826040 (98.8%), 126.6 MBs/sec
-2026-10-21T18:09:45.3793348Z Received 135826040 of 135826040 (100.0%), 113.7 MBs/sec
-2026-10-21T18:09:45.3796319Z Cache Size: ~130 MB (135826040 B)
-2026-10-21T18:09:45.3820256Z [command]/usr/bin/tar -xf /home/runner/work/_temp/88996421-6680-449c-a50e-ea89a31c8d07/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
-2026-10-21T18:09:45.5221214Z Cache restored successfully
-2026-10-21T18:09:45.5274754Z Restored Gradle distribution gradle-8.9 from cache to /home/runner/work/_temp/.gradle-actions/gradle-installations/downloads/gradle-8.9-bin.zip
-2026-10-21T18:09:45.5291545Z [command]/usr/bin/unzip -o -q /home/runner/work/_temp/.gradle-actions/gradle-installations/downloads/gradle-8.9-bin.zip
-2026-10-21T18:09:46.6230325Z Extracted Gradle 8.9 to /home/runner/work/_temp/.gradle-actions/gradle-installations/installs/gradle-8.9
-2026-10-21T18:09:46.6232567Z Provisioned Gradle executable /home/runner/work/_temp/.gradle-actions/gradle-installations/installs/gradle-8.9/bin/gradle
-2026-10-21T18:09:46.6233721Z ##[endgroup]
-2026-10-21T18:09:46.6389753Z ##[group]Run gradle --no-daemon assembleDebug
-2026-10-21T18:09:46.6390283Z [36;1mgradle --no-daemon assembleDebug[0m
-2026-10-21T18:09:46.6563435Z shell: /usr/bin/bash -e {0}
-2026-10-21T18:09:46.6563802Z env:
-2026-10-21T18:09:46.6564212Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
-2026-10-21T18:09:46.6564902Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
-2026-10-21T18:09:46.6565383Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
-2026-10-21T18:09:46.6565746Z   GRADLE_USER_HOME: /home/runner/.gradle
-2026-10-21T18:09:46.6566107Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
-2026-10-21T18:09:46.6566454Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
-2026-10-21T18:09:46.6567101Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
-2026-10-21T18:09:46.6567635Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
-2026-10-21T18:09:46.6568023Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
-2026-10-21T18:09:46.6568406Z ##[endgroup]
-2026-10-21T18:09:47.3396002Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
-2026-10-21T18:09:48.4384174Z Daemon will be stopped at the end of the build 
-2026-10-21T18:10:00.7418200Z > Task :app:preBuild UP-TO-DATE
-2026-10-21T18:10:00.7448484Z > Task :app:preDebugBuild UP-TO-DATE
-2026-10-21T18:10:00.7479412Z > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
-2026-10-21T18:10:00.7496035Z > Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
-2026-10-21T18:10:00.9415273Z > Task :app:checkDebugAarMetadata
-2026-10-21T18:10:00.9416806Z > Task :app:generateDebugResValues
-2026-10-21T18:10:00.9447920Z > Task :app:mapDebugSourceSetPaths
-2026-10-21T18:10:00.9472846Z > Task :app:generateDebugResources
-2026-10-21T18:10:01.1401201Z > Task :app:packageDebugResources
-2026-10-21T18:10:01.2383311Z > Task :app:mergeDebugResources
-2026-10-21T18:10:03.9408633Z > Task :app:createDebugCompatibleScreenManifests
-2026-10-21T18:10:03.9409562Z > Task :app:extractDeepLinksDebug
-2026-10-21T18:10:04.0404495Z > Task :app:parseDebugLocalResources
-2026-10-21T18:10:04.0407576Z > Task :app:processDebugMainManifest
-2026-10-21T18:10:04.1385645Z > Task :app:processDebugManifest
-2026-10-21T18:10:04.1409908Z > Task :app:processDebugManifestForPackage
-2026-10-21T18:10:04.1437863Z > Task :app:javaPreCompileDebug
-2026-10-21T18:10:04.2385447Z > Task :app:mergeDebugShaders
-2026-10-21T18:10:04.2389439Z > Task :app:compileDebugShaders NO-SOURCE
-2026-10-21T18:10:04.2393591Z > Task :app:generateDebugAssets UP-TO-DATE
-2026-10-21T18:10:04.2394292Z > Task :app:mergeDebugAssets
-2026-10-21T18:10:04.3398258Z > Task :app:compressDebugAssets
-2026-10-21T18:10:04.4384733Z > Task :app:processDebugResources
-2026-10-21T18:10:04.8384758Z > Task :app:desugarDebugFileDependencies
-2026-10-21T18:10:05.2418306Z > Task :app:mergeDebugJniLibFolders
-2026-10-21T18:10:05.2419259Z > Task :app:checkDebugDuplicateClasses
-2026-10-21T18:10:05.2447861Z > Task :app:mergeDebugNativeLibs NO-SOURCE
-2026-10-21T18:10:05.7428091Z > Task :app:stripDebugDebugSymbols NO-SOURCE
-2026-10-21T18:10:05.8388345Z > Task :app:mergeLibDexDebug
-2026-10-21T18:10:07.1418033Z > Task :app:validateSigningDebug
-2026-10-21T18:10:07.1479471Z > Task :app:writeDebugAppMetadata
-2026-10-21T18:10:07.2397953Z > Task :app:writeDebugSigningConfigVersions
-2026-10-21T18:10:07.7383660Z > Task :app:mergeExtDexDebug
-2026-10-21T18:10:08.6407973Z 
-2026-10-21T18:10:08.6438611Z e: The daemon has terminated unexpectedly on startup attempt #1 with error code: 0. The daemon process output:
-2026-10-21T18:10:08.6458633Z     1. Kotlin compile daemon is ready
-2026-10-21T18:10:08.6459276Z > Task :app:compileDebugKotlin
-2026-10-21T18:10:14.1384561Z e: file:///home/runner/work/vag-mobile/vag-mobile/app/src/main/java/ru/medoed/vagdiag/MainActivity.kt:427:42 Argument type mismatch: actual type is 'kotlin.Int?', but 'kotlin.Int' was expected.
-2026-10-21T18:10:14.1392321Z 
-2026-10-21T18:10:14.1393075Z > Task :app:compileDebugKotlin FAILED
-2026-10-21T18:10:14.2382891Z 
-2026-10-21T18:10:14.2384202Z gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1792606190454.json
-2026-10-21T18:10:14.2393346Z FAILURE: Build failed with an exception.
-2026-10-21T18:10:14.2393953Z 26 actionable tasks: 26 executed
-2026-10-21T18:10:14.2394506Z 
-2026-10-21T18:10:14.2394791Z * What went wrong:
-2026-10-21T18:10:14.2395448Z Execution failed for task ':app:compileDebugKotlin'.
-2026-10-21T18:10:14.2397003Z > A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
-2026-10-21T18:10:14.2398334Z    > Compilation error. See log for more details
-2026-10-21T18:10:14.2398830Z 
-2026-10-21T18:10:14.2399096Z * Try:
-2026-10-21T18:10:14.2399656Z > Run with --stacktrace option to get the stack trace.
-2026-10-21T18:10:14.2400484Z > Run with --info or --debug option to get more log output.
-2026-10-21T18:10:14.2401210Z > Run with --scan to get full insights.
-2026-10-21T18:10:14.2401904Z > Get more help at https://help.gradle.org.
-2026-10-21T18:10:14.2402377Z 
-2026-10-21T18:10:14.2402645Z BUILD FAILED in 27s
-2026-10-21T18:10:14.9494168Z ##[error]Process completed with exit code 1.
-2026-10-21T18:10:14.9940671Z Post job cleanup.
-2026-10-21T18:10:15.2685263Z In post-action step
-2026-10-21T18:10:15.2697463Z ##[group]Stopping Gradle daemons
-2026-10-21T18:10:15.2698407Z Stopping Gradle daemons for /home/runner/work/_temp/.gradle-actions/gradle-installations/installs/gradle-8.9
-2026-10-21T18:10:15.2712365Z [command]/home/runner/work/_temp/.gradle-actions/gradle-installations/installs/gradle-8.9/bin/gradle --stop
-2026-10-21T18:10:15.9141815Z No Gradle daemons are running.
-2026-10-21T18:10:15.9468528Z ##[endgroup]
-2026-10-21T18:10:15.9469273Z Not performing cache-cleanup due to build failure
-2026-10-21T18:10:15.9470497Z ##[group]Caching Gradle state
-2026-10-21T18:10:16.2551705Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --files-from manifest.txt --use-compress-program zstdmt
-2026-10-21T18:10:17.8080289Z Sent 119886 of 119886 (100.0%), 0.6 MBs/sec
-2026-10-21T18:10:17.9834362Z Saved cache entry with key gradle-kotlin-dsl-v1-ff0b79d657aaec0a81dddb5fc2d22ff6 from /home/runner/.gradle/caches/*/kotlin-dsl/accessors/*/,/home/runner/.gradle/caches/*/kotlin-dsl/scripts/*/ in 1799ms
-2026-10-21T18:10:18.1450466Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --files-from manifest.txt --use-compress-program zstdmt
-2026-10-21T18:10:18.5367560Z Sent 378764 of 378764 (100.0%), 1.5 MBs/sec
-2026-10-21T18:10:18.6695098Z Saved cache entry with key gradle-home-v1|Linux-X64|build[e080f0fdc288b6f0c5023fd4b86f7a10]-97c2c7d9fd7f3b43c0acb30dd39bed296cdec1ba from /home/runner/.gradle/caches,/home/runner/.gradle/notifications,/home/runner/.gradle/.setup-gradle in 533ms
-2026-10-21T18:10:18.6696919Z ##[endgroup]
-2026-10-21T18:10:18.6702970Z Generating Job Summary
-2026-10-21T18:10:18.6714524Z Completed post-action step
-2026-10-21T18:10:18.6914541Z Post job cleanup.
-2026-10-21T18:10:18.8263484Z (node:2811) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
-2026-10-21T18:10:18.8264850Z (Use `node --trace-deprecation ...` to show where the warning was created)
-2026-10-21T18:10:18.8469158Z Post job cleanup.
-2026-10-21T18:10:18.9333797Z [command]/usr/bin/git version
-2026-10-21T18:10:18.9372209Z git version 2.55.0
-2026-10-21T18:10:18.9408504Z Temporarily overriding HOME='/home/runner/work/_temp/6adfd1ea-886c-49e6-aa3f-4919dbc3eaa7' before making global git config changes
-2026-10-21T18:10:18.9410043Z Adding repository directory to the temporary git global config as a safe directory
-2026-10-21T18:10:18.9414836Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/vag-mobile/vag-mobile
-2026-10-21T18:10:18.9452720Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-2026-10-21T18:10:18.9504410Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-2026-10-21T18:10:18.9736506Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
-2026-10-21T18:10:18.9761966Z http.https://github.com/.extraheader
-2026-10-21T18:10:18.9798139Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
-2026-10-21T18:10:18.9818629Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
-2026-10-21T18:10:19.0042493Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
-2026-10-21T18:10:19.0080383Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
-2026-10-21T18:10:19.0450289Z Cleaning up orphan processes
-2026-10-21T18:10:19.0819708Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4, gradle/actions/setup-gradle@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-10-22T12:27:44.0103167Z   add-job-summary: always
+2026-10-22T12:27:44.0103762Z   add-job-summary-as-pr-comment: never
+2026-10-22T12:27:44.0104375Z   dependency-graph: disabled
+2026-10-22T12:27:44.0105014Z   dependency-graph-report-dir: dependency-graph-reports
+2026-10-22T12:27:44.0105751Z   dependency-graph-continue-on-failure: true
+2026-10-22T12:27:44.0106390Z   build-scan-publish: false
+2026-10-22T12:27:44.0106935Z   validate-wrappers: true
+2026-10-22T12:27:44.0107517Z   allow-snapshot-wrappers: false
+2026-10-22T12:27:44.0108106Z   gradle-home-cache-strict-match: false
+2026-10-22T12:27:44.0109007Z   workflow-job-context: null
+2026-10-22T12:27:44.0113260Z   github-token: ***
+2026-10-22T12:27:44.0113747Z env:
+2026-10-22T12:27:44.0114374Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-22T12:27:44.0115377Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-22T12:27:44.0116172Z ##[endgroup]
+2026-10-22T12:27:44.4251758Z Merged default JDK locations into /home/runner/.m2/toolchains.xml
+2026-10-22T12:27:44.4253493Z Preparing cache for cleanup.
+2026-10-22T12:27:44.4257315Z ##[group]Restore Gradle state from cache
+2026-10-22T12:27:44.6614742Z Cache hit for restore-key: gradle-home-v1|Linux-X64|build[e080f0fdc288b6f0c5023fd4b86f7a10]-84168bcfb2d0af798edfbd3bdfb828ee1d87ef9e
+2026-10-22T12:27:45.4797214Z Received 385016 of 385016 (100.0%), 0.7 MBs/sec
+2026-10-22T12:27:45.4800269Z Cache Size: ~0 MB (385016 B)
+2026-10-22T12:27:45.4836320Z [command]/usr/bin/tar -xf /home/runner/work/_temp/e0a4360b-d6b1-4f06-b5dd-4c470fa120ec/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
+2026-10-22T12:27:45.5554271Z Cache restored successfully
+2026-10-22T12:27:45.5564404Z Restored cache entry with key gradle-home-v1|Linux-X64|build[e080f0fdc288b6f0c5023fd4b86f7a10]-233fa550c9c54d663b7bb0ec5bf13737c1fe254d to /home/runner/.gradle/caches,/home/runner/.gradle/notifications,/home/runner/.gradle/.setup-gradle in 1129ms
+2026-10-22T12:27:45.7895636Z Cache hit for: gradle-groovy-dsl-v1-f0e2345103149946739d59b23fb51ae0
+2026-10-22T12:27:45.7905736Z Cache hit for: gradle-generated-gradle-jars-v1-26cfecc158c44513d188405a5d2d0d9c
+2026-10-22T12:27:45.7991218Z Cache hit for: gradle-kotlin-dsl-v1-d50c87a3382412f4a8b93c9a52f196d5
+2026-10-22T12:27:45.8030429Z Cache hit for: gradle-dependencies-v1-03c56354b75e751cbaf47d570dd8b19c
+2026-10-22T12:27:45.8058659Z Cache hit for: gradle-instrumented-jars-v1-e4bff5076870e4ae7d986ee94ae1099c
+2026-10-22T12:27:45.8077978Z Cache hit for: gradle-transforms-v1-86192a47c065a3df9eecd83071ceccb7
+2026-10-22T12:27:46.1224211Z Received 143379 of 143379 (100.0%), 0.5 MBs/sec
+2026-10-22T12:27:46.1226897Z Cache Size: ~0 MB (143379 B)
+2026-10-22T12:27:46.1267492Z [command]/usr/bin/tar -xf /home/runner/work/_temp/22d963c5-be08-4622-ab7e-372a6322ef15/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
+2026-10-22T12:27:46.1511194Z Cache restored successfully
+2026-10-22T12:27:46.1513095Z Restored cache entry with key gradle-groovy-dsl-v1-f0e2345103149946739d59b23fb51ae0 to /home/runner/.gradle/caches/*/groovy-dsl/*/ in 594ms
+2026-10-22T12:27:46.4811680Z Received 89101 of 89101 (100.0%), 0.2 MBs/sec
+2026-10-22T12:27:46.4812454Z Cache Size: ~0 MB (89101 B)
+2026-10-22T12:27:46.4836047Z [command]/usr/bin/tar -xf /home/runner/work/_temp/4294616c-daec-4a70-bf49-7212801d6ab3/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
+2026-10-22T12:27:46.4970643Z Cache restored successfully
+2026-10-22T12:27:46.4991383Z Restored cache entry with key gradle-instrumented-jars-v1-e4bff5076870e4ae7d986ee94ae1099c to /home/runner/.gradle/caches/jars-*/*/ in 942ms
+2026-10-22T12:27:46.6347761Z Received 129012 of 129012 (100.0%), 0.2 MBs/sec
+2026-10-22T12:27:46.6348745Z Cache Size: ~0 MB (129012 B)
+2026-10-22T12:27:46.6369686Z [command]/usr/bin/tar -xf /home/runner/work/_temp/144114c3-c01c-4af0-a9ed-dbb91d963fc1/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
+2026-10-22T12:27:46.6967930Z Cache restored successfully
+2026-10-22T12:27:46.6974155Z Restored cache entry with key gradle-kotlin-dsl-v1-d50c87a3382412f4a8b93c9a52f196d5 to /home/runner/.gradle/caches/*/kotlin-dsl/accessors/*/,/home/runner/.gradle/caches/*/kotlin-dsl/scripts/*/ in 1140ms
+2026-10-22T12:27:47.0465512Z Received 0 of 39619896 (0.0%), 0.0 MBs/sec
+2026-10-22T12:27:47.0943540Z Received 0 of 168186958 (0.0%), 0.0 MBs/sec
+2026-10-22T12:27:47.1041703Z Received 0 of 99481184 (0.0%), 0.0 MBs/sec
+2026-10-22T12:27:47.3934813Z Received 39619896 of 39619896 (100.0%), 28.1 MBs/sec
+2026-10-22T12:27:47.3937854Z Cache Size: ~38 MB (39619896 B)
+2026-10-22T12:27:47.4169408Z [command]/usr/bin/tar -xf /home/runner/work/_temp/bc9f4eb6-33fb-4919-b99e-800ebc5d0c07/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
+2026-10-22T12:27:47.7338298Z Cache restored successfully
+2026-10-22T12:27:47.7363772Z Restored cache entry with key gradle-generated-gradle-jars-v1-26cfecc158c44513d188405a5d2d0d9c to /home/runner/.gradle/caches/8.9/generated-gradle-jars/gradle-api-8.9.jar in 2180ms
+2026-10-22T12:27:48.0948814Z Received 75497472 of 168186958 (44.9%), 35.9 MBs/sec
+2026-10-22T12:27:48.1042592Z Received 88080384 of 99481184 (88.5%), 42.0 MBs/sec
+2026-10-22T12:27:48.2536392Z Received 99481184 of 99481184 (100.0%), 44.1 MBs/sec
+2026-10-22T12:27:48.2540655Z Cache Size: ~95 MB (99481184 B)
+2026-10-22T12:27:48.2785660Z [command]/usr/bin/tar -xf /home/runner/work/_temp/fb2ec1a4-0d6e-466c-8349-c00cdc514522/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
+2026-10-22T12:27:49.0959794Z Cache restored successfully
+2026-10-22T12:27:49.0980593Z Received 130023424 of 168186958 (77.3%), 41.3 MBs/sec
+2026-10-22T12:27:49.1266067Z Restored cache entry with key gradle-transforms-v1-86192a47c065a3df9eecd83071ceccb7 to /home/runner/.gradle/caches/transforms-4/*/,/home/runner/.gradle/caches/*/transforms/*/ in 3569ms
+2026-10-22T12:27:50.0937932Z Received 163992654 of 168186958 (97.5%), 39.1 MBs/sec
+2026-10-22T12:27:51.0947742Z Received 163992654 of 168186958 (97.5%), 31.2 MBs/sec
+2026-10-22T12:27:51.6032589Z Received 168186958 of 168186958 (100.0%), 29.1 MBs/sec
+2026-10-22T12:27:51.6033263Z Cache Size: ~160 MB (168186958 B)
+2026-10-22T12:27:51.6109511Z [command]/usr/bin/tar -xf /home/runner/work/_temp/2ba35dc4-5b5c-45f3-bd6e-fa89840a495d/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
+2026-10-22T12:27:51.8631121Z Cache restored successfully
+2026-10-22T12:27:51.8702550Z Restored cache entry with key gradle-dependencies-v1-03c56354b75e751cbaf47d570dd8b19c to /home/runner/.gradle/caches/modules-*/files-*/*/*/*/* in 6314ms
+2026-10-22T12:27:51.8775441Z ##[endgroup]
+2026-10-22T12:27:51.8837714Z ##[group]All Gradle Wrapper jars are valid
+2026-10-22T12:27:51.8838676Z 
+2026-10-22T12:27:51.8839151Z ##[endgroup]
+2026-10-22T12:27:51.9514690Z ##[group]Provision Gradle 8.9
+2026-10-22T12:27:57.6692736Z Cache hit for: gradle-8.9
+2026-10-22T12:27:58.9566231Z Received 0 of 135826040 (0.0%), 0.0 MBs/sec
+2026-10-22T12:27:59.9567851Z Received 113246208 of 135826040 (83.4%), 54.0 MBs/sec
+2026-10-22T12:28:00.2388852Z Received 135826040 of 135826040 (100.0%), 56.8 MBs/sec
+2026-10-22T12:28:00.2392197Z Cache Size: ~130 MB (135826040 B)
+2026-10-22T12:28:00.2420069Z [command]/usr/bin/tar -xf /home/runner/work/_temp/a3e7f8b0-481d-4e6c-a793-c1d00c1d1d98/cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --use-compress-program unzstd
+2026-10-22T12:28:00.4058129Z Cache restored successfully
+2026-10-22T12:28:00.4120981Z Restored Gradle distribution gradle-8.9 from cache to /home/runner/work/_temp/.gradle-actions/gradle-installations/downloads/gradle-8.9-bin.zip
+2026-10-22T12:28:00.4138094Z [command]/usr/bin/unzip -o -q /home/runner/work/_temp/.gradle-actions/gradle-installations/downloads/gradle-8.9-bin.zip
+2026-10-22T12:28:01.3762063Z Extracted Gradle 8.9 to /home/runner/work/_temp/.gradle-actions/gradle-installations/installs/gradle-8.9
+2026-10-22T12:28:01.3764793Z Provisioned Gradle executable /home/runner/work/_temp/.gradle-actions/gradle-installations/installs/gradle-8.9/bin/gradle
+2026-10-22T12:28:01.3767321Z ##[endgroup]
+2026-10-22T12:28:01.3937040Z ##[group]Run gradle --no-daemon assembleDebug
+2026-10-22T12:28:01.3937524Z [36;1mgradle --no-daemon assembleDebug[0m
+2026-10-22T12:28:01.4185057Z shell: /usr/bin/bash -e {0}
+2026-10-22T12:28:01.4185387Z env:
+2026-10-22T12:28:01.4185762Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-22T12:28:01.4186326Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-22T12:28:01.4186811Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-10-22T12:28:01.4187165Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-10-22T12:28:01.4187503Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-10-22T12:28:01.4187891Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-10-22T12:28:01.4188680Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-10-22T12:28:01.4189233Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-10-22T12:28:01.4189600Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-10-22T12:28:01.4189946Z ##[endgroup]
+2026-10-22T12:28:02.1513573Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-10-22T12:28:03.2504250Z Daemon will be stopped at the end of the build 
+2026-10-22T12:28:15.9539663Z > Task :app:preBuild UP-TO-DATE
+2026-10-22T12:28:15.9549439Z > Task :app:preDebugBuild UP-TO-DATE
+2026-10-22T12:28:15.9585742Z > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+2026-10-22T12:28:16.0503123Z > Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+2026-10-22T12:28:16.1502386Z > Task :app:generateDebugResValues
+2026-10-22T12:28:16.1543311Z > Task :app:checkDebugAarMetadata
+2026-10-22T12:28:16.1569296Z > Task :app:mapDebugSourceSetPaths
+2026-10-22T12:28:16.1579574Z > Task :app:generateDebugResources
+2026-10-22T12:28:16.3529619Z > Task :app:packageDebugResources
+2026-10-22T12:28:16.4502577Z > Task :app:mergeDebugResources
+2026-10-22T12:28:17.0539662Z > Task :app:createDebugCompatibleScreenManifests
+2026-10-22T12:28:17.0569069Z > Task :app:extractDeepLinksDebug
+2026-10-22T12:28:17.1510728Z > Task :app:parseDebugLocalResources
+2026-10-22T12:28:17.1559352Z > Task :app:processDebugMainManifest
+2026-10-22T12:28:17.2503918Z > Task :app:processDebugManifest
+2026-10-22T12:28:17.2505651Z > Task :app:javaPreCompileDebug
+2026-10-22T12:28:17.2506201Z > Task :app:mergeDebugShaders
+2026-10-22T12:28:17.3510003Z > Task :app:compileDebugShaders NO-SOURCE
+2026-10-22T12:28:17.3511078Z > Task :app:generateDebugAssets UP-TO-DATE
+2026-10-22T12:28:17.3512711Z > Task :app:mergeDebugAssets
+2026-10-22T12:28:17.3513622Z > Task :app:processDebugManifestForPackage
+2026-10-22T12:28:17.3514430Z > Task :app:compressDebugAssets
+2026-10-22T12:28:17.6505712Z > Task :app:processDebugResources
+2026-10-22T12:28:18.1504932Z > Task :app:desugarDebugFileDependencies
+2026-10-22T12:28:18.6526670Z > Task :app:mergeDebugJniLibFolders
+2026-10-22T12:28:18.6589167Z > Task :app:checkDebugDuplicateClasses
+2026-10-22T12:28:18.6626908Z > Task :app:mergeDebugNativeLibs NO-SOURCE
+2026-10-22T12:28:19.2552352Z > Task :app:stripDebugDebugSymbols NO-SOURCE
+2026-10-22T12:28:19.2587475Z > Task :app:mergeLibDexDebug
+2026-10-22T12:28:21.0532620Z > Task :app:validateSigningDebug
+2026-10-22T12:28:21.0533562Z > Task :app:writeDebugAppMetadata
+2026-10-22T12:28:21.0534601Z > Task :app:writeDebugSigningConfigVersions
+2026-10-22T12:28:22.2502320Z > Task :app:mergeExtDexDebug
+2026-10-22T12:28:27.5531355Z e: file:///home/runner/work/vag-mobile/vag-mobile/app/src/main/java/ru/medoed/vagdiag/Kw1281Client.kt:227:62 Unresolved reference 'copyOfRange'.
+2026-10-22T12:28:27.5532444Z 
+2026-10-22T12:28:27.5532760Z > Task :app:compileDebugKotlin FAILED
+2026-10-22T12:28:27.5534521Z e: file:///home/runner/work/vag-mobile/vag-mobile/app/src/main/java/ru/medoed/vagdiag/Kw1281Client.kt:227:98 Unresolved reference 'it'.
+2026-10-22T12:28:27.5537256Z e: file:///home/runner/work/vag-mobile/vag-mobile/app/src/main/java/ru/medoed/vagdiag/Kw1281Client.kt:227:130 Overload resolution ambiguity between candidates:
+2026-10-22T12:28:27.5540121Z fun <T> Array<out T>.joinToString(separator: CharSequence = ..., prefix: CharSequence = ..., postfix: CharSequence = ..., limit: Int = ..., truncated: CharSequence = ..., transform: ((T) -> CharSequence)? = ...): String
+2026-10-22T12:28:27.5542842Z fun BooleanArray.joinToString(separator: CharSequence = ..., prefix: CharSequence = ..., postfix: CharSequence = ..., limit: Int = ..., truncated: CharSequence = ..., transform: ((Boolean) -> CharSequence)? = ...): String
+2026-10-22T12:28:27.5545537Z fun ByteArray.joinToString(separator: CharSequence = ..., prefix: CharSequence = ..., postfix: CharSequence = ..., limit: Int = ..., truncated: CharSequence = ..., transform: ((Byte) -> CharSequence)? = ...): String
+2026-10-22T12:28:27.5548775Z fun CharArray.joinToString(separator: CharSequence = ..., prefix: CharSequence = ..., postfix: CharSequence = ..., limit: Int = ..., truncated: CharSequence = ..., transform: ((Char) -> CharSequence)? = ...): String
+2026-10-22T12:28:27.5551814Z fun DoubleArray.joinToString(separator: CharSequence = ..., prefix: CharSequence = ..., postfix: CharSequence = ..., limit: Int = ..., truncated: CharSequence = ..., transform: ((Double) -> CharSequence)? = ...): String
+2026-10-22T12:28:27.5553888Z gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1792672085310.json
+2026-10-22T12:28:27.5556177Z fun FloatArray.joinToString(separator: CharSequence = ..., prefix: CharSequence = ..., postfix: CharSequence = ..., limit: Int = ..., truncated: CharSequence = ..., transform: ((Float) -> CharSequence)? = ...): String
+2026-10-22T12:28:27.5589979Z fun IntArray.joinToString(separator: CharSequence = ..., prefix: CharSequence = ..., postfix: CharSequence = ..., limit: Int = ..., truncated: CharSequence = ..., transform: ((Int) -> CharSequence)? = ...): String
+2026-10-22T12:28:27.5598136Z fun LongArray.joinToString(separator: CharSequence = ..., prefix: CharSequence = ..., postfix: CharSequence = ..., limit: Int = ..., truncated: CharSequence = ..., transform: ((Long) -> CharSequence)? = ...): String
+2026-10-22T12:28:27.5601082Z fun ShortArray.joinToString(separator: CharSequence = ..., prefix: CharSequence = ..., postfix: CharSequence = ..., limit: Int = ..., truncated: CharSequence = ..., transform: ((Short) -> CharSequence)? = ...): String
+2026-10-22T12:28:27.5603835Z fun <T> Iterable<T>.joinToString(separator: CharSequence = ..., prefix: CharSequence = ..., postfix: CharSequence = ..., limit: Int = ..., truncated: CharSequence = ..., transform: ((T) -> CharSequence)? = ...): String
+2026-10-22T12:28:27.5606584Z fun <T> Sequence<T>.joinToString(separator: CharSequence = ..., prefix: CharSequence = ..., postfix: CharSequence = ..., limit: Int = ..., truncated: CharSequence = ..., transform: ((T) -> CharSequence)? = ...): String
+2026-10-22T12:28:27.6501381Z 
+2026-10-22T12:28:27.6568792Z FAILURE: Build failed with an exception.
+2026-10-22T12:28:27.6569489Z 26 actionable tasks: 26 executed
+2026-10-22T12:28:27.6603616Z 
+2026-10-22T12:28:27.6659080Z * What went wrong:
+2026-10-22T12:28:27.6749467Z Execution failed for task ':app:compileDebugKotlin'.
+2026-10-22T12:28:27.6800886Z > A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+2026-10-22T12:28:27.6809522Z    > Compilation error. See log for more details
+2026-10-22T12:28:27.6838993Z 
+2026-10-22T12:28:27.6869228Z * Try:
+2026-10-22T12:28:27.6899198Z > Run with --stacktrace option to get the stack trace.
+2026-10-22T12:28:27.6900222Z > Run with --info or --debug option to get more log output.
+2026-10-22T12:28:27.6929071Z > Run with --scan to get full insights.
+2026-10-22T12:28:27.6959326Z > Get more help at https://help.gradle.org.
+2026-10-22T12:28:27.6988751Z 
+2026-10-22T12:28:27.6989263Z BUILD FAILED in 26s
+2026-10-22T12:28:28.0559324Z ##[error]Process completed with exit code 1.
+2026-10-22T12:28:28.0759674Z Post job cleanup.
+2026-10-22T12:28:28.3219395Z In post-action step
+2026-10-22T12:28:28.3234197Z ##[group]Stopping Gradle daemons
+2026-10-22T12:28:28.3235231Z Stopping Gradle daemons for /home/runner/work/_temp/.gradle-actions/gradle-installations/installs/gradle-8.9
+2026-10-22T12:28:28.3259607Z [command]/home/runner/work/_temp/.gradle-actions/gradle-installations/installs/gradle-8.9/bin/gradle --stop
+2026-10-22T12:28:28.9965595Z No Gradle daemons are running.
+2026-10-22T12:28:29.0062042Z ##[endgroup]
+2026-10-22T12:28:29.0063256Z Not performing cache-cleanup due to build failure
+2026-10-22T12:28:29.0064334Z ##[group]Caching Gradle state
+2026-10-22T12:28:29.3175443Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --files-from manifest.txt --use-compress-program zstdmt
+2026-10-22T12:28:30.4325069Z Sent 131017 of 131017 (100.0%), 0.3 MBs/sec
+2026-10-22T12:28:30.7189144Z Saved cache entry with key gradle-kotlin-dsl-v1-ab121953e155c3c78c2f82cfd4a5e431 from /home/runner/.gradle/caches/*/kotlin-dsl/accessors/*/,/home/runner/.gradle/caches/*/kotlin-dsl/scripts/*/ in 1467ms
+2026-10-22T12:28:30.8190393Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/vag-mobile/vag-mobile --files-from manifest.txt --use-compress-program zstdmt
+2026-10-22T12:28:31.4029294Z Sent 386220 of 386220 (100.0%), 1.3 MBs/sec
+2026-10-22T12:28:31.6599930Z Saved cache entry with key gradle-home-v1|Linux-X64|build[e080f0fdc288b6f0c5023fd4b86f7a10]-233fa550c9c54d663b7bb0ec5bf13737c1fe254d from /home/runner/.gradle/caches,/home/runner/.gradle/notifications,/home/runner/.gradle/.setup-gradle in 850ms
+2026-10-22T12:28:31.6601703Z ##[endgroup]
+2026-10-22T12:28:31.6608803Z Generating Job Summary
+2026-10-22T12:28:31.6620855Z Completed post-action step
+2026-10-22T12:28:31.6841230Z Post job cleanup.
+2026-10-22T12:28:31.8184217Z (node:2990) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-22T12:28:31.8185611Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-22T12:28:31.8392402Z Post job cleanup.
+2026-10-22T12:28:31.9431067Z [command]/usr/bin/git version
+2026-10-22T12:28:31.9479564Z git version 2.55.0
+2026-10-22T12:28:31.9530038Z Temporarily overriding HOME='/home/runner/work/_temp/9f160d4d-9b4c-4c93-b9ea-80da93f38142' before making global git config changes
+2026-10-22T12:28:31.9532001Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-22T12:28:31.9533482Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/vag-mobile/vag-mobile
+2026-10-22T12:28:31.9583619Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-22T12:28:31.9625662Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-22T12:28:31.9941794Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-22T12:28:31.9971423Z http.https://github.com/.extraheader
+2026-10-22T12:28:31.9985782Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-22T12:28:32.0029873Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-22T12:28:32.0324846Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-22T12:28:32.0379538Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-22T12:28:32.0780076Z Cleaning up orphan processes
+2026-10-22T12:28:32.1186339Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-java@v4, gradle/actions/setup-gradle@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
