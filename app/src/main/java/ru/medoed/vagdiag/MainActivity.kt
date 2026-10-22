@@ -91,7 +91,7 @@ class MainActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(permissionReceiver, filter)
         }
-        appendLog("Vasya Diag 1.9.0-alpha started (интерфейс как VCDS/Вася)")
+        appendLog("Vasya Diag 2.0.0-alpha started (интерфейс как VCDS/Вася)")
         appendLog("Vehicle   : Golf IV 1.6 16V BCB / Interface: USB KKL CH340")
         appendLog("KW1281 only. No fabricated ECU data; validation on real vehicle required.")
         val logFile = currentLogFile
@@ -381,7 +381,7 @@ class MainActivity : Activity() {
         val addr = currentAddress()
         appendLog("Подключение к ЭБУ: адрес %02X, старт %d бод (%s), пост-init %s, эхо %d мс, повторов %d".format(
             addr, diagnosticSettings.startBaudRate,
-            if (diagnosticSettings.fastInit) "fast-init, как Вася 9600" else "slow-init",
+            if (diagnosticSettings.fastInit) "fast-init/default, как Вася" else "slow-init",
             if (diagnosticSettings.baudRate == 0) "авто" else "${diagnosticSettings.baudRate} бод",
             diagnosticSettings.echoDelayMs, diagnosticSettings.initRetryTimes))
         runDiagnostic("Подключение (адрес %02X)".format(addr)) { client ->
@@ -473,9 +473,13 @@ class MainActivity : Activity() {
                 "KWP2000 fast-init (VAG, break на 9600)" to 2
             ),
             current.protocolMode)
-        // Start Baud — как два варианта у Васи: 5 = slow-init, 9600 = fast-init.
+        // Start Baud — как в Васе: 0 = default (умолчанию-режим), 5 = slow-init, 9600 = fast-init.
         val startBaud = dropdownField(fields, "Start Baud — режим инициализации (как в Васе)",
-            listOf("5 — slow-init (классический KW1281)" to 5, "9600 — fast-init (рекомендуется для CH340)" to 9600),
+            listOf(
+                "0 — default (рекомендуется; на CH340 это fast-init)" to VasyaDefaults.START_BAUD_AUTO,
+                "5 — slow-init (классический KW1281)" to VasyaDefaults.SLOW_INIT_BAUD,
+                "9600 — fast-init (break-импульс, ваш рабочий рецепт)" to VasyaDefaults.START_BAUD
+            ),
             current.startBaudRate)
         val baud = dropdownField(fields, "Скорость после инициализации",
             listOf("Авто (подбор по адресу, как в Васе)" to 0, "10400" to 10400, "9600" to 9600, "4800" to 4800),

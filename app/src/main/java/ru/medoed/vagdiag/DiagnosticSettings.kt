@@ -15,11 +15,12 @@ data class DiagnosticSettings(
     val responseTimeoutMs: Int = 1000,
     val initTimeoutMs: Int = 5000,
     /**
-     * Start Baud — как в Васе Диагносте: 5 = KW1281 slow-init (кадр адреса на 5 бод),
-     * 9600 = fast-init (break-импульс на 9600, ЭБУ сам начинает слать синхру).
-     * Именно «Start Baud 9600 + Echo Delay 0» у Васи работает с CH340 без поддержки 5 бод.
+     * Start Baud — как в Васе Диагносте: 0 = default (Вася сам решает; здесь это fast-init),
+     * 5 = KW1281 slow-init (кадр адреса на 5 бод), 9600 = fast-init (break-импульс,
+     * ЭБУ сам начинает слать синхру). «Start Baud 9600 + Echo Delay 0» у Васи работает
+     * с CH340 без поддержки 5 бод; 0 ведёт себя так же.
      */
-    val startBaudRate: Int = VasyaDefaults.START_BAUD,
+    val startBaudRate: Int = VasyaDefaults.START_BAUD_AUTO,
     /** Echo delay (Vasya "Echo Delay"): pause around echo/ACK handling. Vasya default: 0. */
     val echoDelayMs: Int = 0,
     /** Blk Int (Vasya "Blk Int"): inter-block delay. Vasya default: 55. */
@@ -35,8 +36,8 @@ data class DiagnosticSettings(
     /** 0 = авто (подбирается по Start Baud), 1 = KWP-1281 slow-init, 2 = KWP-2000 fast-init. */
     val protocolMode: Int = 0
 ) {
-    /** Fast-init активен: явно выбран режим 2 или Start Baud >= 1000 (как 9600 у Васи). */
-    val fastInit: Boolean get() = protocolMode == 2 || (protocolMode == 0 && startBaudRate >= 1000)
+    /** Fast-init активен: явно выбран режим 2, либо авто и Start Baud = 0/9600 (как у Васи). */
+    val fastInit: Boolean get() = protocolMode == 2 || (protocolMode == 0 && VasyaDefaults.isFastInit(startBaudRate))
     fun save(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt("ecu_address", ecuAddress)
@@ -70,18 +71,19 @@ data class DiagnosticSettings(
 
     companion object {
         private const val PREFS = "vag_diag_settings"
-        // Schema 3: добавлены protocol_mode и васькины диапазоны Start Baud (5 или 9600).
-        private const val SETTINGS_SCHEMA = 3
+        // Schema 4: Start Baud теперь принимает 0 (default, как в Васе), 5 (slow-init), 9600 (fast-init).
+        private const val SETTINGS_SCHEMA = 4
 
         /**
-         * Sanitize как в Васе: Start Baud принимает только его два реальных значения —
-         * 5 (slow-init) или 9600 (fast-init). Всё остальное чинится ближайшим осмысленным.
+         * Sanitize как в Васе: Start Baud принимает его реальные значения —
+         * 0 (default), 5 (slow-init) или 9600 (fast-init). Всё остальное чинится ближайшим осмысленным.
          */
         private fun sanitize(s: DiagnosticSettings): DiagnosticSettings {
             val sb = when {
+                s.startBaudRate == 0 -> 0
                 s.startBaudRate in 1..5 -> 5
                 s.startBaudRate >= 4800 -> VasyaProtocol.FAST_INIT_BAUD
-                else -> VasyaDefaults.START_BAUD
+                else -> VasyaDefaults.START_BAUD_AUTO
             }
             return s.copy(startBaudRate = sb)
         }
@@ -98,7 +100,7 @@ data class DiagnosticSettings(
                 baudRate = p.getInt("baud_rate", 0),
                 responseTimeoutMs = p.getInt("response_timeout_ms", 1000),
                 initTimeoutMs = p.getInt("init_timeout_ms", 5000),
-                startBaudRate = p.getInt("start_baud_rate", VasyaDefaults.START_BAUD),
+                startBaudRate = p.getInt("start_baud_rate", VasyaDefaults.START_BAUD_AUTO),
                 echoDelayMs = p.getInt("echo_delay_ms", 0),
                 blockDelayMs = p.getInt("block_delay_ms", 55),
                 interByteDelayMs = p.getInt("inter_byte_delay_ms", 1),

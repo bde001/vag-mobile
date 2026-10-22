@@ -13,7 +13,13 @@ package ru.medoed.vagdiag
  */
 object VasyaDefaults {
 
-    /** Start Baud по умолчанию — 9600 (fast-init, «как в Васе»): надёжнее всего на CH340. */
+    /**
+     * Start Baud = 0 — как в оригинальном Васе: «0 means default».
+     * Приложение при этом выбирает режим само: fast-init (break ~65 мс),
+     * который на CH340 работает так же, как ваш рабочий рецепт «9600 + Delay 0».
+     */
+    const val START_BAUD_AUTO = 0
+    /** Явный fast-init (то, что Вася делает при Start Baud 9600). */
     const val START_BAUD = 9600
     /** Значение Start Baud для классического KW1281 slow-init. */
     const val SLOW_INIT_BAUD = 5
@@ -30,8 +36,17 @@ object VasyaDefaults {
         return listOf(first, 10400, 9600, 4800).distinct()
     }
 
-    /** Васькине допустимое значение Start Baud: 5 (slow-init) или 9600 (fast-init). */
-    val START_BAUD_CHOICES = listOf(SLOW_INIT_BAUD, START_BAUD)
+    /** Васькине допустимые значения Start Baud: 0 (default, как в оригинале), 5 (slow-init), 9600 (fast-init). */
+    val START_BAUD_CHOICES = listOf(START_BAUD_AUTO, SLOW_INIT_BAUD, START_BAUD)
+
+    /** Разрешённые значения при валидации/миграции сохранённых настроек. */
+    val START_BAUD_ALLOWED = START_BAUD_CHOICES
+
+    /**
+     * Реальный режим инициализации по значению Start Baud:
+     * 0 или 9600 -> fast-init; 5 -> классический slow-init.
+     */
+    fun isFastInit(startBaud: Int): Boolean = startBaud == START_BAUD_AUTO || startBaud == START_BAUD
 
     /**
      * Настройки «как в Васе» (Restore defaults в его диалоге Protocol settings):
@@ -43,7 +58,7 @@ object VasyaDefaults {
         baudRate = 0,
         responseTimeoutMs = 1000,
         initTimeoutMs = 5000,
-        startBaudRate = START_BAUD, // 9600 = fast-init как у Васи с CH340; 5 — классический slow-init
+        startBaudRate = START_BAUD_AUTO, // 0 = default (как в Васе); приложение само выберет fast-init
         echoDelayMs = 0,
         blockDelayMs = 55,
         interByteDelayMs = 1,

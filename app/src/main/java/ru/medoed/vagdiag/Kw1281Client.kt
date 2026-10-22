@@ -72,12 +72,12 @@ class Kw1281Client(
         connected = false
         if (address !in 0..0x7F) throw IllegalArgumentException("KW1281 address must be 0..127")
         if (baudRate !in setOf(4800, 9600, 10400)) throw IllegalArgumentException("Supported post-init baud rates: 4800, 9600, 10400")
-        // Как в Васе: Start Baud 5 = slow-init, Start Baud 9600 = fast-init (break-импульс).
-        // protocolMode=1 принудительно включает slow-init даже при Start Baud 9600 (Magneti Marelli 4MV).
-        if (protocolMode != 1 && !fastInit && startBaudRate !in 1..5 && startBaudRate < 4800) {
-            throw IllegalArgumentException("Start Baud должен быть 5 (slow-init) или 9600 (fast-init), как в Васе Диагносте")
+        // Как в Васе: Start Baud 0 = default (fast-init на CH340), 5 = slow-init, 9600 = fast-init.
+        // protocolMode=1 принудительно включает slow-init даже при Start Baud 0/9600 (Magneti Marelli 4MV).
+        if (protocolMode != 1 && !fastInit && startBaudRate != 0 && startBaudRate !in 1..5 && startBaudRate < 4800) {
+            throw IllegalArgumentException("Start Baud должен быть 0 (default), 5 (slow-init) или 9600 (fast-init), как в Васе Диагносте")
         }
-        val useFast = fastInit || (startBaudRate >= 4800 && protocolMode != 1)
+        val useFast = fastInit || (startBaudRate != 5 && startBaudRate >= 4800 && protocolMode != 1) || (startBaudRate == 0 && protocolMode != 1)
         // Каскад методов инициализации (подбор «как в Васе»): fast break -> реальные 5 бод -> serial-break.
         setLineParamsQuietly(if (useFast) VasyaProtocol.FAST_INIT_BAUD else baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
         val method = VasyaProtocol.chooseMethod(port, if (useFast) 9600 else startBaudRate, protocolMode, { log(it) }, { dbg(it) })
@@ -419,12 +419,13 @@ class Kw1281Client(
 
     /** Человекочитаемая подсказка, когда ЭБУ так и не ответил (порт открыт — «реле щёлкнуло», связи нет). */
     private fun buildNoConnectionHint(address: Int, startBaudRate: Int, baudRate: Int, usedBitBangFallback: Boolean): String = buildString {
-        appendLine("ЭБУ не ответил на slow-init (адрес %02X, старт %d бод, пост-init %d бод). Порт открыт, но K-Line молчит.".format(address, startBaudRate, baudRate))
+        val modeName = if (startBaudRate == 0) "default/fast-init" else if (startBaudRate >= 4800) "fast-init" else "slow-init"
+        appendLine("ЭБУ не ответил (%s; адрес %02X, старт %d бод, пост-init %d бод). Порт открыт, но K-Line молчит.".format(modeName, address, startBaudRate, baudRate))
         appendLine("Частые причины:")
-        if (usedBitBangFallback) appendLine("  драйвер не принял 5 бод (аппартное ограничение CH340: минимум ≈2339 бод) — slow-init выполнен serial-break кадром; линия гарантированно отпущена в idle.")
+        if (usedBitBangFallback) appendLine("  драйвер не принял 5 бод (аппартное ограничение CH340: минимум ≈2339 бод) — инициализация выполнена программным break-кадром; линия гарантированно отпущена в idle.")
         appendLine("• Зажигание выключено или ЭБУ не питается (проверь предохранитель, включи зажигание перед подключением).")
         appendLine("• Неверный адрес блока или другой протокол (KWP2000/CAN вместо KW1281).")
-        appendLine("• Попробуй: Start Baud 9600 (fast-init, как в Васе когда он подключается), увеличить Init retry times до 3–5, Debug level=2 для подробного лога.")
+        appendLine("• Попробуй: Start Baud 0 (default) или 9600 (fast-init, как в Васе когда он подключается), увеличить Init retry times до 3–5, Debug level=2 для подробного лога.")
         append(MM4MV_HINT.trimStart())
     }.trimEnd()
 

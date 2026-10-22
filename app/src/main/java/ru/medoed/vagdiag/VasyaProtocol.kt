@@ -47,7 +47,8 @@ object VasyaProtocol {
         val wantFast = when (mode) {
             1 -> false
             2 -> true
-            else -> startBaud >= 1000
+            // Start Baud 0 = default «как в Васе»: на адаптерах без 5 бод это fast-init.
+            else -> startBaud == 0 || startBaud >= 1000
         }
         if (wantFast) {
             if (mode == 2) log("Принудительный fast-init (KWP2000): break ~${FAST_BREAK_MS} мс на 9600 бод")
@@ -217,7 +218,8 @@ object VasyaProtocol {
      */
     fun baudCandidates(startBaud: Int, address: Int, override: Int?, forceSlowInit: Boolean = false): List<Int> {
         val first = override?.takeIf { it in setOf(4800, 9600, 10400) } ?: VasyaDefaults.preferredBaud(address)
-        if (startBaud >= 1000 && !forceSlowInit) {
+        // Start Baud 0 (default, как в Васе) или 9600 = fast-init.
+        if ((startBaud == 0 || startBaud >= 1000) && !forceSlowInit) {
             // Честный fast-init KWP2000 по стандарту ISO 9141-2: ЭБУ отвечает на синхру
             // 0x55 строго на 9600 бод — других ставок у Васи в этом режиме нет.
             // Но если пользователь ЯВНО выбрал скорость пост-init (override, как поле
