@@ -33,7 +33,7 @@ data class DiagnosticSettings(
     val debugLevel: Int = 0,
     /** Init retry times: how many slow-init attempts before giving up (Vasya-style knob). */
     val initRetryTimes: Int = 2,
-    /** 0 = авто (подбирается по Start Baud), 1 = KWP-1281 slow-init, 2 = KWP-2000 fast-init. */
+    /** 0 = авто, 1 = KWP-1281 slow-init, 2 = KWP-2000 fast-init (каскад скоростей), 3 = Marelli 4MV (slow-init + KWP-скорости). */
     val protocolMode: Int = 0
 ) {
     /** Fast-init активен: явно выбран режим 2, либо авто и Start Baud = 0/9600 (как у Васи). */
@@ -85,7 +85,9 @@ data class DiagnosticSettings(
                 s.startBaudRate >= 4800 -> VasyaProtocol.FAST_INIT_BAUD
                 else -> VasyaDefaults.START_BAUD_AUTO
             }
-            return s.copy(startBaudRate = sb)
+            // Режим протокола: только известные значения (0..3), иначе — авто.
+            val pm = if (s.protocolMode in 0..3) s.protocolMode else 0
+            return s.copy(startBaudRate = sb, protocolMode = pm)
         }
 
         fun load(context: Context): DiagnosticSettings {

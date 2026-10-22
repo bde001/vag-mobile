@@ -45,11 +45,11 @@ class Kw1281Client(
      */
     @Synchronized
     fun connectAuto(address: Int = 0x01, preferredBaudRate: Int = 0, preferredStartBaud: Int = 5, initRetries: Int = initRetryTimes, fastInit: Boolean = false, protocolMode: Int = 0): String {
-        val forceSlow = protocolMode == 1
+        val forceSlow = protocolMode == 1 || protocolMode == 3
         val rates = VasyaProtocol.baudCandidates(if (fastInit && !forceSlow) 9600 else preferredStartBaud, address,
-            preferredBaudRate.takeIf { it != 0 }, forceSlowInit = forceSlow)
+            preferredBaudRate.takeIf { it != 0 }, forceSlowInit = forceSlow, mode = protocolMode)
         val errors = mutableListOf<String>()
-        dbgVerbose("Автоопределение (как в Васе): кандидаты пост-init скоростей: ${rates.joinToString()} (${if (forceSlow) "принудительный slow-init KW1281" else if (fastInit) "fast-init 9600" else "slow-init, Start Baud=$preferredStartBaud"})")
+        dbgVerbose("Автоопределение (как в Васе): кандидаты пост-init скоростей: ${rates.joinToString()} (${if (protocolMode == 2) "KWP2000 fast-init, каскад скоростей" else if (protocolMode == 3) "KW1281 slow-init + KWP-скорости (Marelli 4MV)" else if (forceSlow) "принудительный slow-init KW1281" else if (fastInit) "fast-init 9600" else "slow-init, Start Baud=$preferredStartBaud"})")
         for (rate in rates) {
             connected = false
             log("Автоопределение ЭБУ: адрес %02X, проверка %d бод".format(address, rate))
@@ -74,14 +74,18 @@ class Kw1281Client(
         if (baudRate !in setOf(4800, 9600, 10400)) throw IllegalArgumentException("Supported post-init baud rates: 4800, 9600, 10400")
         // Как в Васе: Start Baud 0 = default (fast-init на CH340), 5 = slow-init, 9600 = fast-init.
         // protocolMode=1 принудительно включает slow-init даже при Start Baud 0/9600 (Magneti Marelli 4MV).
-        if (protocolMode != 1 && !fastInit && startBaudRate != 0 && startBaudRate !in 1..5 && startBaudRate < 4800) {
+        if (protocolMode != 1 && protocolMode != 3 && !fastInit && startBaudRate != 0 && startBaudRate !in 1..5 && startBaudRate < 4800) {
             throw IllegalArgumentException("Start Baud должен быть 0 (default), 5 (slow-init) или 9600 (fast-init), как в Васе Диагносте")
         }
-        val useFast = fastInit || (startBaudRate != 5 && startBaudRate >= 4800 && protocolMode != 1) || (startBaudRate == 0 && protocolMode != 1)
+        val useFast = fastInit || (startBaudRate != 5 && startBaudRate >= 4800 && protocolMode != 1 && protocolMode != 3) || (startBaudRate == 0 && protocolMode != 1 && protocolMode != 3)
         // Каскад методов инициализации (подбор «как в Васе»): fast break -> реальные 5 бод -> serial-break.
-        setLineParamsQuietly(if (useFast) VasyaProtocol.FAST_INIT_BAUD else baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+        setLineParamsQuietly(if (useFast && protocolMode != 2) VasyaProtocol.FAST_INIT_BAUD else baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
         val method = VasyaProtocol.chooseMethod(port, if (useFast) 9600 else startBaudRate, protocolMode, { log(it) }, { dbg(it) })
-        val effectiveBaud = if (method == VasyaProtocol.InitMethod.FAST_INIT_9600) VasyaProtocol.FAST_INIT_BAUD else baudRate
+        val effectiveBaud = when {
+            method == VasyaProtocol.InitMethod.FAST_INIT_9600 -> VasyaProtocol.FAST_INIT_BAUD
+            method == VasyaProtocol.InitMethod.KWP_CASCADED -> baudRate // каскад уже даёт нужную ставку из connectAuto
+            else -> baudRate
+        }
         if (effectiveBaud != baudRate) log("Пост-init скорость переключена на $effectiveBaud бод (метод инициализации: ${method.name})")
         dbgVerbose("Инициализация: метод=${method.name}, пост-init $effectiveBaud бод, echo=${echoDelayMs}мс, BLK=${blockDelayMs}мс, Int=${interByteDelayMs}мс, DelayCharInt=${charInterDelayMs}мс")
         pendingRx.clear()
@@ -130,11 +134,11 @@ class Kw1281Client(
             try {
                 syncByte = readByte(400)
             } catch (e: IOException) {
-                throw IOException("ЭБУ прислал 0x%02X вместо синхры 0x55. Похоже на мусор или неверную скорость после инициализации — проверь контакт K-Line и попробуй другой режим (Start Baud 9600 = fast-init).".format(sync), e)
+                throw IOException(buildNoSyncHint(sync, protocolMode), e)
             }
         }
         if (syncByte != 0x55) {
-            throw IOException("ЭБУ прислал 0x%02X вместо синхры 0x55. Проверь адрес блока и режим инициализации (slow/fast).".format(syncByte))
+            throw IOException(buildNoSyncHint(syncByte, protocolMode))
         }
         stage("Синхра получена — читаю keywords…")
         val key1 = readByte(responseTimeoutMs)
@@ -418,6 +422,16 @@ class Kw1281Client(
     }
 
     /** Человекочитаемая подсказка, когда ЭБУ так и не ответил (порт открыт — «реле щёлкнуло», связи нет). */
+    private fun buildNoSyncHint(got: Int, mode: Int): String = buildString {
+        appendLine("ЭБУ прислал 0x%02X вместо синхры 0x55.".format(got))
+        when (mode) {
+            1 -> appendLine("Режим KW1281 slow-init: попробуй скорость пост-init 10400/9600 (приложение перебирает само), увеличь Init retry times до 3–5.")
+            2 -> appendLine("Режим KWP2000 fast-init: линия отвечает, но синхра неверна — часто это мусор из-за скорости. Приложение само переберёт 10400/9600/4800; если и там мимо — проверь контакт K-Line и питание ЭБУ.")
+            3 -> appendLine("Режим Marelli 4MV (slow-init + KWP-скорости): адресный импульс прошёл, но синхра битая — попробуй другую скорость пост-init вручную или Debug level=2 для побайтового лога.")
+            else -> appendLine("Похоже на мусор или неверную скорость после инициализации — проверь контакт K-Line и попробуй другой режим (Start Baud 0/9600 = fast-init, галка KWP-2000 для Marelli).")
+        }
+    }.trimEnd()
+
     private fun buildNoConnectionHint(address: Int, startBaudRate: Int, baudRate: Int, usedBitBangFallback: Boolean): String = buildString {
         val modeName = if (startBaudRate == 0) "default/fast-init" else if (startBaudRate >= 4800) "fast-init" else "slow-init"
         appendLine("ЭБУ не ответил (%s; адрес %02X, старт %d бод, пост-init %d бод). Порт открыт, но K-Line молчит.".format(modeName, address, startBaudRate, baudRate))
@@ -433,13 +447,16 @@ class Kw1281Client(
         /** Подсказка по Magneti Marelli 4MV/4ME7 (мотоциклы MV Agusta/Facco и др.). */
         internal const val MM4MV_HINT = """
 
-Для Magneti Marelli 4MV / 4ME7 (moto ECU):
-• Протокол — KW1281 slow-init: выбери режим «KW1281 slow-init» в настройках протокола
-  (даже если Start Baud стоит 9600 — приложение принудительно сделает медленный старт)
-  и скорость пост-init 10400 бод.
-• К Line у Marelli часто выведен только на колодку диагностики двигателя — проверь, что
-  кабель подключён именно к диагностическому разъёму ЭБУ, а не к CAN-шине.
-• Если синхра приходит, но keywords некорректны — попробуй 9600 и 4800 (приложение
-  перебирает их само в авто-режиме)."""
+Для Magneti Marelli 4MV / 4ME7 (moto ECU) — способы подключения по K-Line:
+1) Режим «Marelli 4MV: slow-init + перебор 10400/9600/4800» (рекомендуемый первый):
+   медленный адресный импульс, затем приложение само перебирает пост-скорости.
+2) Режим «KWP2000 fast-init» — если ЭБУ слушает быстрый старт (break + idle),
+   каскад скоростей 10400 → 9600 → 4800 тоже автоматический.
+3) Режим «KW1281 slow-init» — классика KW1281 с приоритетом 10400.
+4) Увеличь Init retry times до 3–5 и поставь Debug level=2 для побайтового лога.
+• К-Line у Marelli часто выведен только на колодку диагностики двигателя — проверь,
+  что кабель подключён к диагностическому разъёму ЭБУ, а не к CAN-шине.
+• Если ни один режим не отвечает — вероятен протокол без K-Line (CAN) или другой
+  разъём; этот кабель (CH340 KKL) работает только с K-Line-блоками."""
     }
 }

@@ -26,7 +26,11 @@ object VasyaProtocol {
     /** Суммарное время прижатия K-Line для имитации бита 5 бод. */
     private const val SLOW_BIT_MS = 200L
 
-    enum class InitMethod { FIVE_BAUD_FRAME, SERIAL_BREAK_FRAME, FAST_INIT_9600, SOFT_FAST_BREAK }
+    enum class InitMethod { FIVE_BAUD_FRAME, SERIAL_BREAK_FRAME, FAST_INIT_9600, SOFT_FAST_BREAK, KWP_CASCADED }
+
+    /** Каскад пост-init скоростей для KWP2000 fast-init (режим «KWP-2000» как галка в Васе):
+     * сначала 10400 — типично для Marelli 4MV, затем 9600 и 4800. */
+    val KWP_POST_RATES = listOf(10400, 9600, 4800)
 
     /**
      * Каскад автоподбора метода инициализации (как подбор протокола в Васе):
@@ -44,6 +48,19 @@ object VasyaProtocol {
      */
     fun chooseMethod(port: UsbSerialPort, startBaud: Int, mode: Int, log: (String) -> Unit, dbg: (String) -> Unit): InitMethod {
         dbgQuiet = dbg
+        // Режим 3: KW1281 slow-init + KWP-постскорости (Magneti Marelli 4MV): медленный старт,
+        // но post-init перебор 10400/9600/4800 — адресный байт реальных 5 бод или serial-break.
+        if (mode == 3) {
+            log("Режим Marelli 4MV: slow-init + пост-init перебор 10400/9600/4800")
+            return try {
+                port.setParameters(SLOW_INIT_BAUD, 7, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_ODD)
+                InitMethod.FIVE_BAUD_FRAME.also { cached = it }
+            } catch (e: Exception) {
+                dbg("5 бод недоступно (${e.javaClass.simpleName}: ${e.message}) — для Marelli использую serial-break кадр")
+                log("Slow-init метод: serial-break кадр 0x00 + удержание ~${SLOW_BIT_MS} мс + idle (режим Marelli)")
+                InitMethod.SERIAL_BREAK_FRAME.also { cached = it }
+            }
+        }
         val wantFast = when (mode) {
             1 -> false
             2 -> true
@@ -51,7 +68,13 @@ object VasyaProtocol {
             else -> startBaud == 0 || startBaud >= 1000
         }
         if (wantFast) {
-            if (mode == 2) log("Принудительный fast-init (KWP2000): break ~${FAST_BREAK_MS} мс на 9600 бод")
+            // Принудительный KWP2000 (галка «KWP-2000» в Васе): break + каскад пост-скоростей
+            // 10400 → 9600 → 4800 — то, что нужно Marelli 4MV и прочим не-VW ЭБУ.
+            if (mode == 2) {
+                log("Принудительный fast-init (KWP2000): break ~${FAST_BREAK_MS} мс + каскад скоростей 10400/9600/4800")
+                probeFastBreak(port, log) // пробуем аппаратный break; если нет — софт-путь внутри sendWakeUp
+                return InitMethod.KWP_CASCADED.also { cached = it }
+            }
             if (probeFastBreak(port, log)) return InitMethod.FAST_INIT_9600.also { cached = it }
             // Аппаратный break недоступен (типичный CH340) — НЕ уходим в slow-init:
             // Вася при Start Baud 9600 делает именно fast-инициализацию. Используем
@@ -76,6 +99,17 @@ object VasyaProtocol {
     private var cached: InitMethod? = null
     fun resetCache() { cached = null }
 
+    /** Используется ли аппаратный break (для ветвления KWP_CASCADED). */
+    private var fastBreakWorks = false
+
+    /** Быстрая проверка, принимает ли драйвер 5 бод — без записи метода в кеш. */
+    fun canDoFiveBaud(port: UsbSerialPort): Boolean = try {
+        port.setParameters(SLOW_INIT_BAUD, 7, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_ODD)
+        true
+    } catch (e: Exception) {
+        false
+    }
+
     /**
      * Двойная проба «set → отпустить» с проверкой обратного чтения состояния: если драйвер и
      * принимает setBreak, и корректно отдаёт getBreak==false после отпускания — считаем
@@ -96,9 +130,11 @@ object VasyaProtocol {
             // Драйвер принял setBreak(true)+setBreak(false) без исключений оба цикла —
             // считаем аппаратный break рабочим (у сломанных CH340 controlIn/getBreak падает).
             log("Init метод: fast-init 9600 (аппаратный break принят драйвером) — как Вася со Start Baud 9600")
+            fastBreakWorks = true
             true
         } catch (e: Exception) {
             try { port.setBreak(false); port.write(idleByte, 500) } catch (_: Exception) { }
+            fastBreakWorks = false
             false
         }
     }
@@ -181,6 +217,27 @@ object VasyaProtocol {
                 stage("Soft fast-init: программный break ~${FAST_BREAK_MS} мс…")
                 softFastBreak(port, writeTimeoutMs, postInitBaud, dbgVerbose)
             }
+            InitMethod.KWP_CASCADED -> {
+                // KWP2000 fast-init для произвольных ЭБУ (Marelli 4MV и т.п.): break + idle,
+                // затем ЭБУ шлёт синхру на пост-init скорости, выставленной вызывающим кодом.
+                if (fastBreakWorks) {
+                    stage("KWP2000 fast-init: аппаратный break ${FAST_BREAK_MS} мс…")
+                    val idleByte = byteArrayOf(0xFF.toByte())
+                    try {
+                        port.write(idleByte, 500)
+                        port.setBreak(true)
+                        Thread.sleep(FAST_BREAK_MS)
+                        port.setBreak(false)
+                        port.write(idleByte, 500)
+                    } catch (e: Exception) {
+                        try { port.setBreak(false); port.write(idleByte, 500) } catch (_: Exception) { }
+                        throw IOException("Не удалось выполнить KWP fast-init (break): ${e.message}", e)
+                    }
+                } else {
+                    stage("KWP2000 fast-init: программный break ~${FAST_BREAK_MS} мс…")
+                    softFastBreak(port, writeTimeoutMs, postInitBaud, dbgVerbose)
+                }
+            }
             InitMethod.FIVE_BAUD_FRAME -> {
                 try {
                     port.setParameters(SLOW_INIT_BAUD, 7, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_ODD)
@@ -216,10 +273,17 @@ object VasyaProtocol {
      * При slow-init приоритет по адресу блока (01/15/17/25/35/36 → 10400, остальные → 9600),
      * затем остальные ставки.
      */
-    fun baudCandidates(startBaud: Int, address: Int, override: Int?, forceSlowInit: Boolean = false): List<Int> {
+    fun baudCandidates(startBaud: Int, address: Int, override: Int?, forceSlowInit: Boolean = false, mode: Int = 0): List<Int> {
         val first = override?.takeIf { it in setOf(4800, 9600, 10400) } ?: VasyaDefaults.preferredBaud(address)
+        // Режим KWP2000 (галка «KWP-2000» в Васе): каскад пост-скоростей 10400 → 9600 → 4800;
+        // если пользователь явно выбрал скорость — начинаем с неё.
+        if (mode == 2) {
+            return listOfNotNull(override?.takeIf { it in setOf(4800, 9600, 10400) }) + KWP_POST_RATES
+        }
+        // Режим Marelli 4MV (slow-init + KWP-скорости): полный перебор от предпочтительной.
+        if (mode == 3) return listOf(first, 10400, 9600, 4800).distinct()
         // Start Baud 0 (default, как в Васе) или 9600 = fast-init.
-        if ((startBaud == 0 || startBaud >= 1000) && !forceSlowInit) {
+        if ((startBaud == 0 || startBaud >= 1000) && !forceSlowInit && mode != 1) {
             // Честный fast-init KWP2000 по стандарту ISO 9141-2: ЭБУ отвечает на синхру
             // 0x55 строго на 9600 бод — других ставок у Васи в этом режиме нет.
             // Но если пользователь ЯВНО выбрал скорость пост-init (override, как поле

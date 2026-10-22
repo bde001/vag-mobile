@@ -91,7 +91,7 @@ class MainActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(permissionReceiver, filter)
         }
-        appendLog("Vasya Diag 2.0.0-alpha started (интерфейс как VCDS/Вася)")
+        appendLog("Vasya Diag 2.1.0-alpha started (интерфейс как VCDS/Вася)")
         appendLog("Vehicle   : Golf IV 1.6 16V BCB / Interface: USB KKL CH340")
         appendLog("KW1281 only. No fabricated ECU data; validation on real vehicle required.")
         val logFile = currentLogFile
@@ -470,7 +470,8 @@ class MainActivity : Activity() {
             listOf(
                 "Авто (подбирается по Start Baud)" to 0,
                 "KW1281 slow-init (Magneti Marelli 4MV/4ME7, moto)" to 1,
-                "KWP2000 fast-init (VAG, break на 9600)" to 2
+                "KWP2000 fast-init (VAG, break на 9600)" to 2,
+                "Marelli 4MV: slow-init + перебор 10400/9600/4800" to 3
             ),
             current.protocolMode)
         // Start Baud — как в Васе: 0 = default (умолчанию-режим), 5 = slow-init, 9600 = fast-init.
