@@ -72,6 +72,14 @@ class Kw1281Client(
         connected = false
         if (address !in 0..0x7F) throw IllegalArgumentException("KW1281 address must be 0..127")
         if (baudRate !in setOf(4800, 9600, 10400)) throw IllegalArgumentException("Supported post-init baud rates: 4800, 9600, 10400")
+        // === Шаг 0. Активация трансивера L9637D (КРИТИЧНО для VAG-COM 409.1 на CH340) ===
+        // Без DTR/RTS трансивер не питается, K-Line физически мёртв — реле даже не щёлкает.
+        val ctl = VasyaProtocol.activateTransceiver(port)
+        log("Трансивер L9637D: $ctl — K-Line активен")
+        Thread.sleep(100)
+        // === Шаг 1. Очистка буферов от мусора прошлых попыток ===
+        val cleared = VasyaProtocol.clearUsbBuffer(port, this::dbgVerbose)
+        if (cleared > 0) dbg("Буфер очищен: выброшено $cleared байт мусора")
         // Как в Васе: Start Baud 0 = default (fast-init на CH340), 5 = slow-init, 9600 = fast-init.
         // protocolMode=1 принудительно включает slow-init даже при Start Baud 0/9600 (Magneti Marelli 4MV).
         if (protocolMode != 1 && protocolMode != 3 && !fastInit && startBaudRate != 0 && startBaudRate !in 1..5 && startBaudRate < 4800) {

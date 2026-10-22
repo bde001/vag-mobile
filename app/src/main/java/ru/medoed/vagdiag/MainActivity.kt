@@ -91,7 +91,7 @@ class MainActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(permissionReceiver, filter)
         }
-        appendLog("Vasya Diag 2.1.0-alpha started (интерфейс как VCDS/Вася)")
+        appendLog("Vasya Diag 2.3.0-alpha started (DTR+RTS активация трансивера, software break) (интерфейс как VCDS/Вася)")
         appendLog("Vehicle   : Golf IV 1.6 16V BCB / Interface: USB KKL CH340")
         appendLog("KW1281 only. No fabricated ECU data; validation on real vehicle required.")
         val logFile = currentLogFile
@@ -649,6 +649,9 @@ class MainActivity : Activity() {
                 val serial = driver.ports.firstOrNull() ?: throw IOException("У адаптера нет serial-порта")
                 runOnUiThread { updateBusy("Инициализация UART…") }
                 serial.open(connection)
+                // КРИТИЧНО ДЛЯ VAG KKL КАБЕЛЕЙ НА CH340+L9637D: DTR/RTS управляют питанием
+                // трансивера; без них K-Line физически мёртв (ЭБУ молчит, реле не щёлкает).
+                val ctl = VasyaProtocol.activateTransceiver(serial)
                 // Стартовая скорость порта — просто настройка UART; режим инициализации ЭБУ
                 // (fast/slow) выбирается при подключении по настройкам «как в Васе».
                 serial.setParameters(VasyaProtocol.FAST_INIT_BAUD, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
@@ -660,7 +663,7 @@ class MainActivity : Activity() {
                     hideBusy()
                     status.text = "Тестер      : USB открыт"; status.setTextColor(uiOk)
                     deviceInfo.text = "Адаптер     : VID %04X · PID %04X\n              Готов к подключению · режим: %s".format(Locale.US, device.vendorId, device.productId, if (diagnosticSettings.fastInit) "fast-init 9600 (как в Васе)" else "slow-init 5 бод")
-                    appendLog("USB serial port opened; UART configured 10400 8N1")
+                    appendLog("USB serial port opened; UART configured 9600 8N1; трансивер: $ctl")
                     appendLog("Адаптер готов. Связь с ЭБУ ещё не установлена — нажми «Подключить ЭБУ двигателя».")
                 }
             } catch (e: Exception) {

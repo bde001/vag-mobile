@@ -111,6 +111,104 @@ object VasyaProtocol {
     }
 
     /**
+     * Активация трансивера L9637D в кабелях VAG-COM 409.1 на CH340: линии DTR и RTS
+     * управляют питанием/направлением трансивера, а не модемными сигналами. Без
+     * setDTR(true)/setRTS(true) K-Line физически «мёртв» — ЭБУ не видит вообще ничего
+     * (симптом: реле даже не щёлкает). Вася Диагност на ПК выставляет DTR/RTS сам;
+     * usb-serial-for-android по умолчанию их не трогает. Реализация CH340 в библиотеке
+     * шлёт controlOut(0xA4, ~(DTR|RTS)) — ровно то, что нужно для питания трансивера.
+     * Возвращает текст для журнала: что установлено, что драйвер отверг.
+     */
+    fun activateTransceiver(port: UsbSerialPort): String {
+        val parts = mutableListOf<String>()
+        try { port.setDTR(true); parts += "DTR=true" } catch (e: Exception) { parts += "DTR✗(${e.javaClass.simpleName})" }
+        try { port.setRTS(true); parts += "RTS=true" } catch (e: Exception) { parts += "RTS✗(${e.javaClass.simpleName})" }
+        return parts.joinToString(", ")
+    }
+
+    /**
+     * Очистка буферов перед попыткой инициализации: аппаратно purgeHwBuffers() (если
+     * драйвер поддерживает — у CH340 обычно нет), затем программное вычитывание мусора.
+     * Если в буфере остался мусор от прошлой попытки, CH340 выплёвывает его в K-Line и
+     * ЭБУ видит кашу вместо чистого сигнала инициализации.
+     * Возвращает число вычищенных байт.
+     */
+    fun clearUsbBuffer(port: UsbSerialPort, dbgVerbose: (String) -> Unit): Int {
+        try {
+            port.purgeHwBuffers(true, true)
+            dbgVerbose("purgeHwBuffers(TX+RX) выполнен")
+        } catch (e: Exception) {
+            dbgVerbose("purgeHwBuffers не поддерживается (${e.javaClass.simpleName}) — чищу программно")
+        }
+        var totalCleared = 0
+        val dummy = ByteArray(256)
+        try {
+            while (true) {
+                val n = port.read(dummy, 50)
+                if (n <= 0) break
+                totalCleared += n
+            }
+        } catch (_: Exception) { /* таймаут чтения = буфер пуст */ }
+        if (totalCleared > 0) dbgVerbose("Очищено байт из буфера приёма: $totalCleared")
+        return totalCleared
+    }
+
+    /**
+     * Программный break для CH340, где setBreak() либо падает с IOException, либо молча
+     * не прижимает линию. Отправка 0x00 на минимальной доступной скорости держит линию
+     * в LOW: на 300 бод каждый кадр 0x00 = ~26.7 мс low из 33 мс; несколько кадров
+     * подряд + резкая смена скорости дают гарантированные >60 мс провала, который ЭБУ
+     * читает как старт-бит инициализации (fast-init). Всегда возвращает линию в idle
+     * (0xFF) и оставляет порт на postInitBaud. Возвращает false, если ни одна низкая
+     * скорость драйверу не доступна — вызывающий код тогда использует поток нулей.
+     */
+    fun sendSoftwareBreak(port: UsbSerialPort, postInitBaud: Int, writeTimeoutMs: Int,
+                          dbgVerbose: (String) -> Unit): Boolean {
+        // Каскад скоростей: пробуем от самых низких — оригинальный CH340 жрёт 300+,
+        // некоторые копии тянут 250.
+        val rates = intArrayOf(250, 300, 600)
+        for (rate in rates) {
+            try {
+                port.setParameters(rate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+                Thread.sleep(20) // стабилизация после смены скорости
+                val zero = byteArrayOf(0x00)
+                repeat(4) { port.write(zero, writeTimeoutMs.coerceAtLeast(100)); Thread.sleep(30) }
+                // Резко переключаем на рабочую скорость — даёт фронт idle после low
+                port.setParameters(postInitBaud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+                Thread.sleep(50) // критично: время на перестройку PLL CH340 и ЭБУ
+                port.write(byteArrayOf(0xFF.toByte()), writeTimeoutMs) // линия гарантированно idle
+                dbgVerbose("software break: 4×0x00 на %d бод (~%.0f мс low) → idle на %d бод".format(rate, 4 * 10 * 1000.0 / rate, postInitBaud))
+                return true
+            } catch (e: Exception) {
+                dbgVerbose("software break: %d бод недоступно (${e.javaClass.simpleName})")
+            }
+        }
+        return false
+    }
+
+    /**
+     * Guaranteed line-low via a stream of 0x00 frames at the working baud rate: each byte
+     * keeps K-Line low for ~9 bit times, so writing zeros back-to-back holds the line down
+     * for as long as the write lasts. Ends with an explicit idle byte (0xFF). This is the
+     * fallback when even 250..600 baud is rejected by the driver.
+     */
+    fun softwareBreakViaZeroStream(port: UsbSerialPort, postInitBaud: Int, holdMs: Long,
+                                   writeTimeoutMs: Int, dbgVerbose: (String) -> Unit) {
+        port.setParameters(postInitBaud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+        val bitMs = 1000.0 / postInitBaud
+        val zeros = ByteArray(64).also { java.util.Arrays.fill(it, 0x00.toByte()) }
+        val deadline = System.currentTimeMillis() + holdMs
+        var written = 0
+        while (System.currentTimeMillis() < deadline) {
+            port.write(zeros, writeTimeoutMs.coerceAtLeast(200))
+            written += zeros.size
+        }
+        dbgVerbose("software break: поток 0x00 (%d байт ≈ %.0f мс low) на %d бод".format(written, written * 10 * bitMs, postInitBaud))
+        port.write(byteArrayOf(0xFF.toByte()), writeTimeoutMs) // вернуть линию в idle
+        Thread.sleep(40)
+    }
+
+    /**
      * Двойная проба «set → отпустить» с проверкой обратного чтения состояния: если драйвер и
      * принимает setBreak, и корректно отдаёт getBreak==false после отпускания — считаем
      * аппаратный break надёжным. Иначе (типичный CH340: getBreak controlIn(0x1312) падает,
@@ -118,6 +216,9 @@ object VasyaProtocol {
      */
     private fun probeFastBreak(port: UsbSerialPort, log: (String) -> Unit): Boolean {
         val idleByte = byteArrayOf(0xFF.toByte())
+        // ВНИМАНИЕ: у CH340 в usb-serial-for-android setBreak() может НЕ бросать исключение,
+        // но линию физически не прижимать — «принято драйвером» ≠ «сработало». Проба ниже
+        // формальная; для CH340 основной путь и так software break (см. sendSoftwareBreak).
         return try {
             repeat(2) {
                 port.write(idleByte, 500)   // гарантируем idle перед импульсом
@@ -127,8 +228,6 @@ object VasyaProtocol {
                 port.write(idleByte, 500)   // сразу отпускаем линию байтом idle
                 Thread.sleep(30)
             }
-            // Драйвер принял setBreak(true)+setBreak(false) без исключений оба цикла —
-            // считаем аппаратный break рабочим (у сломанных CH340 controlIn/getBreak падает).
             log("Init метод: fast-init 9600 (аппаратный break принят драйвером) — как Вася со Start Baud 9600")
             fastBreakWorks = true
             true
@@ -152,40 +251,16 @@ object VasyaProtocol {
      */
     fun softFastBreak(port: UsbSerialPort, writeTimeoutMs: Int, postInitBaud: Int,
                       dbgVerbose: (String) -> Unit) {
-        val targetMs = FAST_BREAK_MS
-        // Способ A: честные низкие скорости (если драйвер их принимает)
-        val lowRates = intArrayOf(250, 300, 600)
-        for (rate in lowRates) {
-            val bitMs = 1000.0 / rate
-            try {
-                port.setParameters(rate, 7, UsbSerialPort.STOPBITS_2, UsbSerialPort.PARITY_NONE)
-                val bitsNeeded = Math.ceil((targetMs - bitMs * 2) / bitMs).toInt().coerceAtLeast(1)
-                val frame = ByteArray(bitsNeeded + 1) // start+data bits of 0x00 each
-                java.util.Arrays.fill(frame, 0x00.toByte())
-                dbgVerbose("soft fast-init: %d бод 7N2, %d low-бит (~%.0f мс)".format(rate, bitsNeeded + 2, bitMs * (bitsNeeded + 2)))
-                port.write(frame, writeTimeoutMs)
-                Thread.sleep((bitMs * (bitsNeeded + 2)).toLong().coerceAtMost(targetMs + 40))
-                return
-            } catch (e: Exception) {
-                dbgVerbose("soft fast-init: %d бод недоступно (${e.javaClass.simpleName})")
-            }
-        }
-        // Способ B: поток нулевых кадров на пост-init скорости — линия прижата low, пока идёт запись
+        // Способ A (приоритетный): программный break по рецепту CH340 — 4 кадра 0x00 на
+        // минимальной доступной скорости (250/300/600 бод), затем резкий переход на
+        // postInitBaud. Каждый кадр 0x00 держит линию low ~9 бит; переключение скорости
+        // даёт чистый фронт idle. Именно так работает Вася, когда драйвер не даёт break.
+        if (sendSoftwareBreak(port, postInitBaud, writeTimeoutMs, dbgVerbose)) return
+        // Способ B: даже 600 бод недоступно — поток нулевых кадров на пост-init скорости:
+        // линия прижата low, пока идёт запись; отпускаем idle-байтом 0xFF.
+        dbgVerbose("software break: низкие скорости недоступны — fallback: поток 0x00 на $postInitBaud бод")
         try {
-            port.setParameters(postInitBaud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
-            val bitMs = 1000.0 / postInitBaud
-            val zeros = ByteArray(64).also { java.util.Arrays.fill(it, 0x00.toByte()) }
-            val deadline = System.currentTimeMillis() + targetMs
-            var written = 0
-            while (System.currentTimeMillis() < deadline) {
-                port.write(zeros, writeTimeoutMs)
-                written += zeros.size
-            }
-            val lowMs = written * 10 * bitMs
-            dbgVerbose("soft fast-init: поток 0x00 (%d байт ≈ %.0f мс low) на %d бод".format(written, lowMs, postInitBaud))
-            // Отпустить линию: idle-байт, потом короткая пауза для восстановления K-Line
-            port.write(byteArrayOf(0xFF.toByte()), writeTimeoutMs)
-            Thread.sleep(40)
+            softwareBreakViaZeroStream(port, postInitBaud, FAST_BREAK_MS, writeTimeoutMs, dbgVerbose)
         } catch (e: IOException) {
             throw IOException("Не удалось выполнить soft fast-init (break через 0x00): ${e.message}", e)
         }
@@ -210,7 +285,11 @@ object VasyaProtocol {
                     port.write(idleByte, 500) // немедленно отпускаем K-Line (idle high)
                 } catch (e: Exception) {
                     try { port.setBreak(false); port.write(idleByte, 500) } catch (_: Exception) { }
-                    throw IOException("Не удалось выполнить fast-init (break): ${e.message}", e)
+                    // setBreak() упал — не сдаёмся: программный break (0x00 на низкой скорости).
+                    dbgVerbose("аппаратный break недоступен (${e.javaClass.simpleName}) — software break")
+                    if (!sendSoftwareBreak(port, postInitBaud, writeTimeoutMs, dbgVerbose)) {
+                        throw IOException("Не удалось выполнить fast-init (break): ${e.message}", e)
+                    }
                 }
             }
             InitMethod.SOFT_FAST_BREAK -> {
@@ -250,11 +329,16 @@ object VasyaProtocol {
             }
             InitMethod.SERIAL_BREAK_FRAME -> {
                 try {
+                    // KW1281 slow-init на CH340: адресный байт формируем как «serial break» —
+                    // старт-бит + 8 нулей, удержанные ~200 мс (эквивалент бита 5 бод).
+                    // Сначала пробуем честный программный break на низкой скорости
+                    // (sendSoftwareBreak даёт чистый длинный low-импульс); если драйвер
+                    // не принимает даже 600 бод — держим линию потоком нулей.
+                    stage("Медленный старт (serial-break)…")
                     val bitMs = 1000.0 / postInitBaud
                     val frameMs = bitMs * 9 // start + 8 data bits of 0x00
                     val holdMs = (SLOW_BIT_MS - frameMs).coerceAtLeast(0.0).toLong()
                     dbgVerbose("Slow-init serial-break: кадр 0x00 (~${frameMs.toInt()} мс low) + пауза ${holdMs} мс + idle 0xFF")
-                    stage("Медленный старт (serial-break)…")
                     port.write(byteArrayOf(0x00), 1000)
                     Thread.sleep(holdMs + 5)
                     port.write(byteArrayOf(0xFF.toByte()), 1000) // вернуть линию в idle
