@@ -24,9 +24,13 @@ object VasyaDefaults {
     /** Значение Start Baud для классического KW1281 slow-init. */
     const val SLOW_INIT_BAUD = 5
 
-    /** Скорость post-init, с которой Вася начинает опрос конкретного блока. */
+    /**
+     * Скорость post-init, с которой Вася начинает опрос конкретного блока.
+     * По рабочему скриншоту Васи на Golf IV: Start Baud 9600 — т.е. сеанс KW1281 живёт
+     * на 9600 бод; 10400 остаётся вторым кандидатом для блоков, которые на нём работают.
+     */
     fun preferredBaud(address: Int): Int = when (address) {
-        0x01, 0x15, 0x17, 0x25, 0x35, 0x36 -> 10400
+        0x01, 0x15, 0x17, 0x25, 0x35, 0x36 -> 9600
         else -> 9600
     }
 
@@ -49,21 +53,23 @@ object VasyaDefaults {
     fun isFastInit(startBaud: Int): Boolean = startBaud == START_BAUD_AUTO || startBaud == START_BAUD
 
     /**
-     * Настройки «как в Васе» (Restore defaults в его диалоге Protocol settings):
-     * Start Baud 5, Echo Delay 0, Blk Int 55, Char Int 1, KP2 Time 25 мс, Debug Level 0.
+     * Настройки «как в Васе» — точные значения с рабочего скриншота его диалога
+     * Protocol settings на ПК (Golf IV + CH340):
+     * Start Baud 9600, Echo Delay 500, Blk Int 55, Char Int 1, KP2 Time 25, протокол KWP-1281.
      */
     fun vasyaSettings(ecuAddress: Int = 1): DiagnosticSettings = DiagnosticSettings(
         ecuAddress = ecuAddress,
-        // null = автоподбор скорости по адресу, как делает Вася Диагност
+        // 0 = автоподбор скорости по адресу, как делает Вася Диагност
         baudRate = 0,
         responseTimeoutMs = 1000,
         initTimeoutMs = 5000,
-        startBaudRate = START_BAUD_AUTO, // 0 = default (как в Васе); приложение само выберет fast-init
-        echoDelayMs = 0,
-        blockDelayMs = 55,
-        interByteDelayMs = 1,
+        startBaudRate = START_BAUD, // 9600 — ровно как у Васи на скриншоте
+        echoDelayMs = 500,          // Vasya "Echo Delay" = 500
+        blockDelayMs = 55,          // Vasya "Blk Int" = 55
+        interByteDelayMs = 1,       // Vasya "Char Int" = 1
         charInterDelayMs = 1,
         debugLevel = 0,
-        initRetryTimes = 2
+        initRetryTimes = 2,
+        protocolMode = 1            // KWP-1281 (галка KWP-1281 в Васе), НЕ KWP-2000
     )
 }

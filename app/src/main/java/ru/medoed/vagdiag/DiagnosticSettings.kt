@@ -29,6 +29,8 @@ data class DiagnosticSettings(
     val interByteDelayMs: Int = 1,
     /** Delay Char int: additional pause between characters while transmitting (ms). */
     val charInterDelayMs: Int = 1,
+    /** KW2 Delay (Vasya "KW2 Delay"): pause after sending the address/init byte before switching to session baud. Vasya working value: 30 ms. */
+    val kw2DelayMs: Int = 30,
     /** Debug level: 0 = off, 1 = normal TX/RX byte log, 2 = verbose handshake timing. */
     val debugLevel: Int = 0,
     /** Init retry times: how many slow-init attempts before giving up (Vasya-style knob). */
@@ -49,6 +51,7 @@ data class DiagnosticSettings(
             .putInt("block_delay_ms", blockDelayMs)
             .putInt("inter_byte_delay_ms", interByteDelayMs)
             .putInt("char_inter_delay_ms", charInterDelayMs)
+            .putInt("kw2_delay_ms", kw2DelayMs)
             .putInt("debug_level", debugLevel)
             .putInt("init_retry_times", initRetryTimes)
             // Маркер версии настроек: старые сборки могли сохранить Start Baud=9600 из-за
@@ -62,17 +65,19 @@ data class DiagnosticSettings(
 
     /** Concise one-line summary for the diagnostic log when settings are saved. */
     fun describe(): String =
-        "адрес %02X, старт %d бод (%s), пост-init %s, echo %d мс, Blk Int %d мс, Char Int %d мс, DelayCharInt %d мс, Debug %d, повторов инициализации %d".format(
+        "адрес %02X, старт %d бод (%s), пост-init %s, echo %d мс, Blk Int %d мс, Char Int %d мс, DelayCharInt %d мс, KW2 Delay %d мс, Debug %d, повторов инициализации %d".format(
             ecuAddress, startBaudRate, if (fastInit) "fast-init" else "slow-init",
             if (baudRate == 0) "авто по адресу (как в Васе)" else "$baudRate бод",
             echoDelayMs, blockDelayMs,
-            interByteDelayMs, charInterDelayMs, debugLevel, initRetryTimes
+            interByteDelayMs, charInterDelayMs, kw2DelayMs, debugLevel, initRetryTimes
         )
 
     companion object {
         private const val PREFS = "vag_diag_settings"
-        // Schema 4: Start Baud теперь принимает 0 (default, как в Васе), 5 (slow-init), 9600 (fast-init).
-        private const val SETTINGS_SCHEMA = 4
+        // Schema 5: точные васьины дефолты со скриншота — Start Baud 9600, Echo Delay 500,
+        // KW2 Delay 30, протокол KWP-1281; старые сохранённые настройки при обновлении
+        // сбрасываются на них один раз.
+        private const val SETTINGS_SCHEMA = 5
 
         /**
          * Sanitize как в Васе: Start Baud принимает его реальные значения —
@@ -107,6 +112,7 @@ data class DiagnosticSettings(
                 blockDelayMs = p.getInt("block_delay_ms", 55),
                 interByteDelayMs = p.getInt("inter_byte_delay_ms", 1),
                 charInterDelayMs = p.getInt("char_inter_delay_ms", 1),
+                kw2DelayMs = p.getInt("kw2_delay_ms", 30),
                 debugLevel = p.getInt("debug_level", 0),
                 initRetryTimes = p.getInt("init_retry_times", 2),
                 protocolMode = p.getInt("protocol_mode", 0)

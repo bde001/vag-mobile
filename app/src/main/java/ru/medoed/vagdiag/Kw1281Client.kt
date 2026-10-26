@@ -17,6 +17,8 @@ class Kw1281Client(
     private val blockDelayMs: Int = 30,
     private val interByteDelayMs: Int = 5,
     private val charInterDelayMs: Int = 0,
+    /** KW2 Delay (Vasya): пауза после wake-up/адресного байта перед переключением на скорость сеанса. */
+    private val kw2DelayMs: Int = 30,
     private val debugLevel: Int = 0,
     private val initRetryTimes: Int = 2,
     /** Optional stage callback for the on-screen progress dialog (called from the IO thread). */
@@ -106,6 +108,9 @@ class Kw1281Client(
             stage("Отправка инициализации (попытка $attempt/$retries)…")
             setLineParamsQuietly(effectiveBaud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
             VasyaProtocol.sendWakeUp(port, method, address, effectiveBaud, writeTimeoutMs = 1000, this::stage, this::dbgVerbose)
+            // KW2 Delay (как в Васе, 30 мс): пауза сразу после wake-up-кадра — ЭБУ за это
+            // время переходит на скорость сеанса и начинает слать синхру.
+            pause(kw2DelayMs)
             // Возврат на пост-init скорость ДО чтения: ЭБУ шлёт синхру сразу после старта
             // именно на ней (10400/9600), читать на 5 бод смысла нет.
             setLineParamsQuietly(effectiveBaud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)

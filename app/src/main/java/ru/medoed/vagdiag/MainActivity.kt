@@ -91,7 +91,7 @@ class MainActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(permissionReceiver, filter)
         }
-        appendLog("Vasya Diag 2.3.0-alpha started (DTR+RTS активация трансивера, software break) (интерфейс как VCDS/Вася)")
+        appendLog("Vasya Diag 2.4.0-alpha started (параметры Васи со скриншота: Start Baud 9600, Echo Delay 500, KW2 Delay 30, KWP-1281) (интерфейс как VCDS/Вася)")
         appendLog("Vehicle   : Golf IV 1.6 16V BCB / Interface: USB KKL CH340")
         appendLog("KW1281 only. No fabricated ECU data; validation on real vehicle required.")
         val logFile = currentLogFile
@@ -487,10 +487,11 @@ class MainActivity : Activity() {
             current.baudRate)
         val response = field("Тайм-аут ответа, мс", current.responseTimeoutMs)
         val init = field("Тайм-аут инициализации, мс", current.initTimeoutMs)
-        val echoDelay = field("Echo Delay — пауза вокруг эха/ACK, мс (как в Васе: 0)", current.echoDelayMs)
+        val echoDelay = field("Echo Delay — пауза вокруг эха/ACK, мс (как в Васе: 500)", current.echoDelayMs)
         val blkDelay = field("Blk Int — задержка между блоками, мс (как в Васе: 55)", current.blockDelayMs)
         val intDelay = field("Char Int — межбайтовая задержка в блоке, мс (как в Васе: 1)", current.interByteDelayMs)
         val charIntDelay = field("Delay Char int — доп. пауза между символами, мс (как в Васе: 1)", current.charInterDelayMs)
+        val kw2Delay = field("KW2 Delay — пауза после адресного байта перед скоростью сеанса, мс (как в Васе: 30)", current.kw2DelayMs)
         val debug = dropdownField(fields, "Debug Level",
             listOf("0 — выключен" to 0, "1 — байты TX/RX" to 1, "2 — максимально подробно" to 2),
             current.debugLevel)
@@ -527,16 +528,18 @@ class MainActivity : Activity() {
                         val blk = blkDelay.text.toString().toIntOrNull()
                         val inter = intDelay.text.toString().toIntOrNull()
                         val charInt = charIntDelay.text.toString().toIntOrNull()
+                        val kw2 = kw2Delay.text.toString().toIntOrNull()
                         val dbgLvl = debug()
                         val rt = retries.text.toString().toIntOrNull()
                         val error = when {
                             a == null || a !in 0..127 -> "Адрес должен быть от 0 до 127"
                             r == null || r !in 100..10000 -> "Тайм-аут ответа: 100–10000 мс"
                             i == null || i !in 1000..15000 -> "Тайм-аут инициализации: 1000–15000 мс"
-                            echo == null || echo !in 0..100 -> "Echo delay: 0–100 мс"
+                            echo == null || echo !in 0..2000 -> "Echo Delay: 0–2000 мс"
                             blk == null || blk !in 0..1000 -> "Blk Int: 0–1000 мс"
                             inter == null || inter !in 0..100 -> "Char Int: 0–100 мс"
                             charInt == null || charInt !in 0..100 -> "Delay Char int: 0–100 мс"
+                            kw2 == null || kw2 !in 0..500 -> "KW2 Delay: 0–500 мс"
                             rt == null || rt !in 1..5 -> "Повторов инициализации: 1–5"
                             else -> null
                         }
@@ -548,6 +551,7 @@ class MainActivity : Activity() {
                             ecuAddress = a!!, baudRate = b, responseTimeoutMs = r!!, initTimeoutMs = i!!,
                             startBaudRate = sb, echoDelayMs = echo!!, blockDelayMs = blk!!,
                             interByteDelayMs = inter!!, charInterDelayMs = charInt!!,
+                            kw2DelayMs = kw2!!,
                             debugLevel = dbgLvl, initRetryTimes = rt!!,
                             protocolMode = pm
                         )
@@ -720,6 +724,7 @@ class MainActivity : Activity() {
         blockDelayMs = diagnosticSettings.blockDelayMs,
         interByteDelayMs = diagnosticSettings.interByteDelayMs,
         charInterDelayMs = diagnosticSettings.charInterDelayMs,
+        kw2DelayMs = diagnosticSettings.kw2DelayMs,
         debugLevel = diagnosticSettings.debugLevel,
         initRetryTimes = diagnosticSettings.initRetryTimes,
         onStage = { stage -> updateBusy(if (stagePrefix != null) "$stagePrefix $stage" else stage) }
